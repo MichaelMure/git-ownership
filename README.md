@@ -34,6 +34,7 @@ This writes `<reponame>.html` in the current directory. Open it in a browser.
 | `--output`     | `<reponame>.html` | Output file path                                          |
 | `--max-points` | `1000`            | Max chart data points (downsampled with LTTB)             |
 | `--min-pct`    | `1.0`             | Authors who never exceeded this % are grouped into Others |
+| `--workers`    | num CPUs          | Parallel `git log` workers                                |
 
 ## Output
 
