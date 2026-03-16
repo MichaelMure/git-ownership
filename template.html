@@ -27,8 +27,9 @@
       display: flex; flex-direction: column; gap: .75rem;
     }
     .card-toolbar {
-      display: flex; align-items: center; justify-content: space-between; flex-shrink: 0;
+      display: flex; align-items: center; gap: .6rem; flex-shrink: 0;
     }
+    .card-toolbar .search-wrap { margin-left: auto; }
     .chart-wrap { position: relative; flex: 1; min-height: 300px; }
 
     /* mode toggle */
@@ -128,6 +129,10 @@
           <button class="toggle-btn active" id="btn-pct" onclick="setMode('pct')">% Share</button>
           <button class="toggle-btn"        id="btn-abs" onclick="setMode('abs')">Line Count</button>
         </div>
+        <div class="toggle-group">
+          <button class="toggle-btn active" id="btn-x-commits" onclick="setXMode('commits')">Commits</button>
+          <button class="toggle-btn"        id="btn-x-time"    onclick="setXMode('time')">Time</button>
+        </div>
         <div class="search-wrap">
           <input class="search-input" id="author-search" type="text"
                  placeholder="Search author…" autocomplete="off" oninput="onSearch(event)">
@@ -153,9 +158,22 @@
 
   <script>
     const DATA = {{.DataJSON}};
-    let mode = 'pct';
+    let mode  = 'pct';
+    let xMode = 'commits'; // 'commits' (even spacing) | 'time' (linear calendar)
     let sparkChart = null;
-    let hoveredDatasetIdx = -1; // dataset the cursor is physically nearest to
+    let hoveredDatasetIdx = -1;
+
+    // Unix-ms timestamp for each snapshot, parsed from the "YYYY-MM-DD hash" label.
+    const timestamps = DATA.labels.map(l => new Date(l.slice(0, 10)).getTime());
+
+    // Indices sorted by timestamp ascending.
+    // Topological order (commit order) ≠ chronological order: feature-branch
+    // commits often carry timestamps earlier than the merge commit they landed in.
+    // Plotting them unsorted causes lines to jump backwards in time mode.
+    const timeOrder = timestamps
+      .map((t, i) => ({ t, i }))
+      .sort((a, b) => a.t - b.t)
+      .map(o => o.i);
 
     // ── helpers ────────────────────────────────────────────────────────────────
     function fmtLines(n) {
@@ -218,6 +236,35 @@
 
     // ── build Chart.js datasets from DATA ─────────────────────────────────────
     function makeChartDatasets() {
+      if (xMode === 'time') {
+        // Chart.js's built-in stacking (scales.y.stacked) doesn't work correctly
+        // with type:'linear' + {x,y} point data — the accumulation is unreliable
+        // and the total drifts from 100%.  Instead we pre-compute the cumulative
+        // sum ourselves and render with fill:'-1' so Chart.js just draws shapes.
+        // rawData stores the original per-author values for tooltip display.
+        const n = timeOrder.length;
+        const cumulative = new Float64Array(n); // running sum per sorted position
+        return DATA.datasets.map((ds, dsIdx) => {
+          const vals = currentData(ds);
+          const rawData = timeOrder.map(i => vals[i]);
+          const data = rawData.map((v, j) => {
+            cumulative[j] += v;
+            return { x: timestamps[timeOrder[j]], y: cumulative[j] };
+          });
+          return {
+            label:           ds.label,
+            data,
+            rawData,          // side-channel: incremental values for tooltip
+            fill:            dsIdx === 0 ? 'origin' : '-1',
+            backgroundColor: ds.backgroundColor,
+            borderColor:     ds.borderColor,
+            borderWidth:     ds.borderWidth,
+            tension:         0, // straight lines preserve the stacked sum exactly
+          };
+        });
+      }
+
+      // commits mode — let Chart.js handle stacking via scales.y.stacked
       return DATA.datasets.map(ds => ({
         label:           ds.label,
         data:            currentData(ds),
@@ -227,6 +274,14 @@
         borderWidth:     ds.borderWidth,
         tension:         ds.tension,
       }));
+    }
+
+    // Return the display value (non-cumulative) for a dataset at a point index.
+    function displayValue(dsIdx, pointIdx) {
+      const ds = chart.data.datasets[dsIdx];
+      return xMode === 'time'
+        ? (ds.rawData ? ds.rawData[pointIdx] : 0)
+        : (ds.data[pointIdx] || 0);
     }
 
     // ── custom tooltip positioner: follows cursor on the side, never below ────
@@ -248,6 +303,14 @@
       data: { labels: DATA.labels, datasets: makeChartDatasets() },
       options: chartOptions(),
     });
+
+    function applyXMode() {
+      // In time mode data points carry their own x value; labels array is unused.
+      chart.data.labels   = xMode === 'time' ? [] : DATA.labels;
+      chart.data.datasets = makeChartDatasets();
+      chart.options       = chartOptions();
+      chart.update();
+    }
 
     function chartOptions() {
       const isPct = mode === 'pct';
@@ -272,15 +335,28 @@
           const datasets = chart.data.datasets;
           let cumulative = 0;
           hoveredDatasetIdx = -1;
-          for (let i = 0; i < datasets.length; i++) {
-            const val = datasets[i].data[xIdx] || 0;
-            const pixelBottom = yScale.getPixelForValue(cumulative);
-            cumulative += val;
-            const pixelTop = yScale.getPixelForValue(cumulative);
-            // Canvas y grows downward: pixelTop < pixelBottom
-            if (pos.y >= pixelTop && pos.y <= pixelBottom) {
-              hoveredDatasetIdx = i;
-              break;
+          if (xMode === 'time') {
+            // Data is pre-stacked: dataset[i].data[xIdx].y is the cumulative top
+            // of band i. Walk bands from bottom (0) upward.
+            let prevPixel = yScale.getPixelForValue(0);
+            for (let i = 0; i < datasets.length; i++) {
+              const pt = datasets[i].data[xIdx];
+              const cumY = pt ? pt.y : 0;
+              const topPixel = yScale.getPixelForValue(cumY);
+              if (pos.y >= topPixel && pos.y <= prevPixel) {
+                hoveredDatasetIdx = i; break;
+              }
+              prevPixel = topPixel;
+            }
+          } else {
+            for (let i = 0; i < datasets.length; i++) {
+              const val = datasets[i].data[xIdx] || 0;
+              const pixelBottom = yScale.getPixelForValue(cumulative);
+              cumulative += val;
+              const pixelTop = yScale.getPixelForValue(cumulative);
+              if (pos.y >= pixelTop && pos.y <= pixelBottom) {
+                hoveredDatasetIdx = i; break;
+              }
             }
           }
         },
@@ -288,13 +364,24 @@
           if (hoveredDatasetIdx >= 0) showPanel(hoveredDatasetIdx);
         },
         scales: {
-          x: {
+          x: xMode === 'time' ? {
+            type: 'linear',
+            ticks: {
+              color: '#475569', maxTicksLimit: 20, maxRotation: 45, font: { size: 10 },
+              // Format millisecond tick values as YYYY-MM
+              callback: v => {
+                const d = new Date(v);
+                return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+              },
+            },
+            grid: { color: '#1e293b' },
+          } : {
             stacked: true,
             ticks: { color: '#475569', maxTicksLimit: 20, maxRotation: 45, font: { size: 10 } },
             grid: { color: '#1e293b' },
           },
           y: {
-            stacked: true,
+            stacked: xMode !== 'time', // time mode uses pre-stacked cumulative values
             min: 0,
             max: isPct ? 100 : undefined,
             ticks: {
@@ -306,17 +393,32 @@
           },
         },
         plugins: {
-          decimation: { enabled: true, algorithm: 'lttb', samples: 600 },
+          // In time mode, LTTB runs per-dataset independently and may keep
+          // different point subsets across datasets. Since our y values are
+          // pre-stacked cumulatives, a missing point in dataset N but present
+          // in dataset N-1 forces Chart.js to interpolate the fill boundary,
+          // producing a mismatch (visual "hiccup"). Safe to skip: the data is
+          // already capped at --max-points so there's rarely much to decimate.
+          decimation: { enabled: xMode !== 'time', algorithm: 'lttb', samples: 600 },
           tooltip: {
             position: 'cursor',
             backgroundColor: '#0f172a',
             borderColor: '#475569', borderWidth: 1,
             titleColor: '#94a3b8', bodyColor: '#cbd5e1',
-            filter: item => item.parsed.y > 0,
-            itemSort: (a, b) => b.parsed.y - a.parsed.y,
+            filter: item => displayValue(item.datasetIndex, item.dataIndex) > 0,
+            itemSort: (a, b) =>
+              displayValue(b.datasetIndex, b.dataIndex) -
+              displayValue(a.datasetIndex, a.dataIndex),
             callbacks: {
+              title: ctx => {
+                if (!ctx.length) return '';
+                if (xMode === 'time') {
+                  return new Date(ctx[0].parsed.x).toISOString().slice(0, 10);
+                }
+                return DATA.labels[ctx[0].dataIndex] || '';
+              },
               label: ctx => {
-                const v = ctx.parsed.y;
+                const v = displayValue(ctx.datasetIndex, ctx.dataIndex);
                 const isHovered = ctx.datasetIndex === hoveredDatasetIdx;
                 const prefix = isHovered ? '▶ ' : '  ';
                 return prefix + ctx.dataset.label + ': ' + (isPct ? fmtPct(v) : fmtLines(v) + ' lines');
@@ -336,21 +438,24 @@
       };
     }
 
-    // ── mode toggle ────────────────────────────────────────────────────────────
+    // ── mode toggles ───────────────────────────────────────────────────────────
     function setMode(newMode) {
       mode = newMode;
       document.getElementById('btn-pct').classList.toggle('active', mode === 'pct');
       document.getElementById('btn-abs').classList.toggle('active', mode === 'abs');
-      chart.data.datasets.forEach((ds, i) => { ds.data = currentData(DATA.datasets[i]); });
-      // Rebuild options so scale max/labels update correctly
-      chart.options = chartOptions();
-      chart.update();
-      // Refresh sparkline if panel is open
+      applyXMode();
       const panel = document.getElementById('author-panel');
       if (!panel.classList.contains('hidden')) {
         const idx = panel.dataset.authorIdx;
         if (idx !== undefined) drawSparkline(+idx);
       }
+    }
+
+    function setXMode(m) {
+      xMode = m;
+      document.getElementById('btn-x-commits').classList.toggle('active', m === 'commits');
+      document.getElementById('btn-x-time').classList.toggle('active', m === 'time');
+      applyXMode();
     }
 
     // ── author panel ───────────────────────────────────────────────────────────
