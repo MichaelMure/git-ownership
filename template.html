@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Git Code Ownership — {{.Repo}}</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace;
+      background: #0f172a; color: #e2e8f0;
+      min-height: 100vh; display: flex; flex-direction: column;
+      padding: 1.5rem 2rem; gap: 1rem;
+    }
+    header { display: flex; flex-direction: column; gap: .4rem; }
+    h1 { font-size: 1.25rem; font-weight: 700; color: #f8fafc; }
+    h1 em { color: #60a5fa; font-style: normal; font-weight: 400; }
+    .meta { display: flex; flex-wrap: wrap; gap: 1.5rem; font-size: .8rem; color: #64748b; }
+    .meta span { color: #94a3b8; }
+
+    /* main layout: chart + optional side panel */
+    .body-row { display: flex; gap: 1rem; flex: 1; min-height: 0; }
+    .card {
+      background: #1e293b; border: 1px solid #334155; border-radius: .75rem;
+      padding: 1.25rem; flex: 1; min-width: 0;
+      display: flex; flex-direction: column; gap: .75rem;
+    }
+    .card-toolbar {
+      display: flex; align-items: center; justify-content: space-between; flex-shrink: 0;
+    }
+    .chart-wrap { position: relative; flex: 1; min-height: 300px; }
+
+    /* mode toggle */
+    .toggle-group { display: flex; background: #0f172a; border-radius: .4rem; overflow: hidden; border: 1px solid #334155; }
+    .toggle-btn {
+      padding: .3rem .85rem; font-size: .8rem; font-family: inherit;
+      background: transparent; color: #64748b; border: none; cursor: pointer;
+      transition: background .15s, color .15s;
+    }
+    .toggle-btn.active { background: #3b82f6; color: #fff; }
+    .toggle-btn:hover:not(.active) { background: #1e3a5f; color: #94a3b8; }
+
+    /* author info panel */
+    .author-panel {
+      width: 420px; flex-shrink: 0;
+      background: #1e293b; border: 1px solid #334155; border-radius: .75rem;
+      padding: 1.25rem; display: flex; flex-direction: column; gap: 1rem;
+      overflow-y: auto;
+    }
+    .author-panel.hidden { display: none; }
+    .panel-close {
+      align-self: flex-end; background: none; border: none; color: #475569;
+      cursor: pointer; font-size: 1.1rem; line-height: 1; padding: 0;
+    }
+    .panel-close:hover { color: #cbd5e1; }
+    .panel-author-header { display: flex; flex-direction: column; gap: .3rem; }
+    .panel-color-bar { height: 3px; border-radius: 2px; margin-bottom: .25rem; }
+    .panel-name { font-size: 1rem; font-weight: 600; color: #f1f5f9; word-break: break-all; }
+    .panel-email { font-size: .75rem; color: #64748b; word-break: break-all; }
+    .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .6rem; }
+    .stat {
+      background: #0f172a; border-radius: .5rem; padding: .6rem .7rem;
+      display: flex; flex-direction: column; gap: .15rem;
+    }
+    .stat.full { grid-column: 1 / -1; }
+    .stat-value { font-size: .95rem; font-weight: 700; color: #f1f5f9; }
+    .stat-label { font-size: .68rem; color: #475569; text-transform: uppercase; letter-spacing: .04em; }
+    .sparkline-wrap { flex: 1; min-height: 80px; }
+    .panel-hint { font-size: .72rem; color: #334155; text-align: center; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Git Code Ownership <em>— surviving lines per author over time</em></h1>
+    <div class="meta">
+      <div>repo: <span>{{.Repo}}</span></div>
+      <div>branch: <span>{{.Branch}}</span></div>
+      <div>commits: <span>{{.TotalCommits}}</span></div>
+      <div>snapshots: <span>{{.Samples}}</span></div>
+      <div>authors: <span>{{.Authors}}</span></div>
+      <div>generated: <span>{{.Generated}}</span></div>
+    </div>
+  </header>
+
+  <div class="body-row">
+    <div class="card">
+      <div class="card-toolbar">
+        <div class="toggle-group">
+          <button class="toggle-btn active" id="btn-pct" onclick="setMode('pct')">% Share</button>
+          <button class="toggle-btn"        id="btn-abs" onclick="setMode('abs')">Line Count</button>
+        </div>
+        <span style="font-size:.75rem;color:#334155">click a legend item for details</span>
+      </div>
+      <div class="chart-wrap"><canvas id="chart"></canvas></div>
+    </div>
+
+    <div class="author-panel hidden" id="author-panel">
+      <button class="panel-close" onclick="closePanel()" title="Close">&#x2715;</button>
+      <div class="panel-author-header">
+        <div class="panel-color-bar" id="panel-color-bar"></div>
+        <div class="panel-name"  id="panel-name"></div>
+        <div class="panel-email" id="panel-email"></div>
+      </div>
+      <div class="stats-grid" id="panel-stats"></div>
+      <div class="sparkline-wrap"><canvas id="sparkline"></canvas></div>
+      <div class="panel-hint">own line count over time</div>
+    </div>
+  </div>
+
+  <script>
+    const DATA = {{.DataJSON}};
+    let mode = 'pct';
+    let sparkChart = null;
+    let hoveredDatasetIdx = -1; // dataset the cursor is physically nearest to
+
+    // ── helpers ────────────────────────────────────────────────────────────────
+    function fmtLines(n) {
+      if (n >= 1e6) return (n/1e6).toFixed(2) + 'M';
+      if (n >= 1e3) return (n/1e3).toFixed(1) + 'k';
+      return n.toLocaleString();
+    }
+    function fmtPct(v) { return v.toFixed(1) + '%'; }
+
+    function currentData(ds) {
+      return mode === 'pct' ? ds.pctData : ds.absData;
+    }
+
+    // ── build Chart.js datasets from DATA ─────────────────────────────────────
+    function makeChartDatasets() {
+      return DATA.datasets.map(ds => ({
+        label:           ds.label,
+        data:            currentData(ds),
+        fill:            ds.fill,
+        backgroundColor: ds.backgroundColor,
+        borderColor:     ds.borderColor,
+        borderWidth:     ds.borderWidth,
+        tension:         ds.tension,
+      }));
+    }
+
+    // ── custom tooltip positioner: follows cursor on the side, never below ────
+    Chart.Tooltip.positioners.cursor = function(items, pos) {
+      if (!items.length) return false;
+      const offset = 16;
+      const tipWidth = this.width || 200;
+      const rightEdge = this.chart.chartArea.right;
+      if (pos.x + offset + tipWidth > rightEdge) {
+        // Not enough room on the right — flip to the left.
+        return { x: pos.x - offset, y: pos.y, xAlign: 'right', yAlign: 'center' };
+      }
+      return { x: pos.x + offset, y: pos.y, xAlign: 'left', yAlign: 'center' };
+    };
+
+    // ── initial chart ─────────────────────────────────────────────────────────
+    const chart = new Chart(document.getElementById('chart'), {
+      type: 'line',
+      data: { labels: DATA.labels, datasets: makeChartDatasets() },
+      options: chartOptions(),
+    });
+
+    function chartOptions() {
+      const isPct = mode === 'pct';
+      return {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: false,
+        interaction: { mode: 'index', intersect: false },
+        onHover(evt) {
+          // Find which band the cursor is physically inside using 'nearest' mode.
+          // This runs before the tooltip renders, so the callback below can read it.
+          if (evt.native) {
+            const els = chart.getElementsAtEventForMode(
+              evt.native, 'nearest', { intersect: false }, true
+            );
+            hoveredDatasetIdx = els.length > 0 ? els[0].datasetIndex : -1;
+          }
+        },
+        onClick() {
+          if (hoveredDatasetIdx >= 0) showPanel(hoveredDatasetIdx);
+        },
+        scales: {
+          x: {
+            stacked: true,
+            ticks: { color: '#475569', maxTicksLimit: 20, maxRotation: 45, font: { size: 10 } },
+            grid: { color: '#1e293b' },
+          },
+          y: {
+            stacked: true,
+            min: 0,
+            max: isPct ? 100 : undefined,
+            ticks: {
+              color: '#475569',
+              font: { size: 11 },
+              callback: isPct ? (v => v + '%') : (v => fmtLines(v)),
+            },
+            grid: { color: '#334155' },
+          },
+        },
+        plugins: {
+          decimation: { enabled: true, algorithm: 'lttb', samples: 600 },
+          tooltip: {
+            position: 'cursor',
+            backgroundColor: '#0f172a',
+            borderColor: '#475569', borderWidth: 1,
+            titleColor: '#94a3b8', bodyColor: '#cbd5e1',
+            filter: item => item.parsed.y > 0,
+            itemSort: (a, b) => b.parsed.y - a.parsed.y,
+            callbacks: {
+              label: ctx => {
+                const v = ctx.parsed.y;
+                const isHovered = ctx.datasetIndex === hoveredDatasetIdx;
+                const prefix = isHovered ? '▶ ' : '  ';
+                return prefix + ctx.dataset.label + ': ' + (isPct ? fmtPct(v) : fmtLines(v) + ' lines');
+              },
+              labelTextColor: ctx => {
+                return ctx.datasetIndex === hoveredDatasetIdx ? '#f1f5f9' : '#94a3b8';
+              },
+            },
+          },
+          legend: {
+            position: 'bottom',
+            labels: { color: '#94a3b8', padding: 16, boxWidth: 12, font: { size: 11 } },
+            onClick(evt, item) { showPanel(item.datasetIndex); },
+          },
+        },
+        elements: { point: { radius: 0, hoverRadius: 3 } },
+      };
+    }
+
+    // ── mode toggle ────────────────────────────────────────────────────────────
+    function setMode(newMode) {
+      mode = newMode;
+      document.getElementById('btn-pct').classList.toggle('active', mode === 'pct');
+      document.getElementById('btn-abs').classList.toggle('active', mode === 'abs');
+      chart.data.datasets.forEach((ds, i) => { ds.data = currentData(DATA.datasets[i]); });
+      // Rebuild options so scale max/labels update correctly
+      chart.options = chartOptions();
+      chart.update();
+      // Refresh sparkline if panel is open
+      const panel = document.getElementById('author-panel');
+      if (!panel.classList.contains('hidden')) {
+        const idx = panel.dataset.authorIdx;
+        if (idx !== undefined) drawSparkline(+idx);
+      }
+    }
+
+    // ── author panel ───────────────────────────────────────────────────────────
+    function showPanel(idx) {
+      const ds   = DATA.datasets[idx];
+      const abs  = ds.absData;
+      const last = abs.length - 1;
+
+      // Compute stats from raw data
+      let peak = 0, peakIdx = 0, firstIdx = -1;
+      for (let i = 0; i <= last; i++) {
+        if (abs[i] > peak) { peak = abs[i]; peakIdx = i; }
+        if (firstIdx < 0 && abs[i] > 0) firstIdx = i;
+      }
+
+      const finalLines = abs[last];
+      const totalNow   = DATA.datasets.reduce((s, d) => s + (d.absData[last] || 0), 0);
+      const finalPct   = totalNow > 0 ? finalLines / totalNow * 100 : 0;
+
+      let totalAtPeak = 0;
+      DATA.datasets.forEach(d => totalAtPeak += d.absData[peakIdx] || 0);
+      const peakPct = totalAtPeak > 0 ? peak / totalAtPeak * 100 : 0;
+
+      const firstDate = firstIdx >= 0 ? DATA.labels[firstIdx].split(' ')[0] : '—';
+      const lastDate  = DATA.labels[last].split(' ')[0];
+
+      // Populate panel
+      document.getElementById('panel-color-bar').style.background = ds.borderColor;
+      document.getElementById('panel-name').textContent  = ds.label;
+      document.getElementById('panel-email').textContent = ds.email;
+
+      document.getElementById('panel-stats').innerHTML =
+        stat(fmtLines(finalLines), 'current lines') +
+        stat(fmtPct(finalPct),     'current share') +
+        stat(fmtLines(peak),       'peak lines') +
+        stat(fmtPct(peakPct),      'peak share') +
+        stat(firstDate,            'first commit', true) +
+        stat(lastDate,             'last commit',  true);
+
+      const panel = document.getElementById('author-panel');
+      panel.dataset.authorIdx = idx;
+      panel.classList.remove('hidden');
+
+      drawSparkline(idx);
+    }
+
+    function stat(value, label, full) {
+      return '<div class="stat' + (full ? ' full' : '') + '">' +
+        '<div class="stat-value">' + value + '</div>' +
+        '<div class="stat-label">' + label + '</div>' +
+        '</div>';
+    }
+
+    function drawSparkline(idx) {
+      const ds   = DATA.datasets[idx];
+      const data = mode === 'pct' ? ds.pctData : ds.absData;
+      const isPct = mode === 'pct';
+      if (sparkChart) { sparkChart.destroy(); sparkChart = null; }
+      sparkChart = new Chart(document.getElementById('sparkline'), {
+        type: 'line',
+        data: {
+          labels: DATA.labels,
+          datasets: [{
+            data: data,
+            fill: true,
+            backgroundColor: ds.backgroundColor,
+            borderColor:     ds.borderColor,
+            borderWidth: 1.5,
+            tension: 0.3,
+          }],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          animation: false,
+          plugins: { legend: { display: false }, tooltip: { enabled: false },
+                     decimation: { enabled: true, algorithm: 'lttb', samples: 100 } },
+          scales: {
+            x: { display: false, stacked: false },
+            y: {
+              display: true, stacked: false, min: 0,
+              ticks: { color: '#334155', font: { size: 9 },
+                       callback: isPct ? (v => v.toFixed(0)+'%') : (v => fmtLines(v)),
+                       maxTicksLimit: 4 },
+              grid: { color: '#1a2744' },
+            },
+          },
+          elements: { point: { radius: 0 } },
+        },
+      });
+    }
+
+    function closePanel() {
+      document.getElementById('author-panel').classList.add('hidden');
+      if (sparkChart) { sparkChart.destroy(); sparkChart = null; }
+    }
+  </script>
+</body>
+</html>
