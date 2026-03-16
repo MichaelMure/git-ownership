@@ -4,13 +4,13 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Git Code Ownership — {{.Repo}}</title>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script>{{.ChartJS}}</script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace;
       background: #0f172a; color: #e2e8f0;
-      min-height: 100vh; display: flex; flex-direction: column;
+      height: 100vh; overflow: hidden; display: flex; flex-direction: column;
       padding: 1.5rem 2rem; gap: 1rem;
     }
     header { display: flex; flex-direction: column; gap: .4rem; }
@@ -46,19 +46,21 @@
       width: 420px; flex-shrink: 0;
       background: #1e293b; border: 1px solid #334155; border-radius: .75rem;
       padding: 1.25rem; display: flex; flex-direction: column; gap: 1rem;
-      overflow-y: auto;
+      min-height: 0;   /* let the flex parent cap our height */
+      overflow: hidden; /* we don't scroll — inner sections do */
     }
     .author-panel.hidden { display: none; }
     .panel-close {
-      align-self: flex-end; background: none; border: none; color: #475569;
+      align-self: flex-end; flex-shrink: 0;
+      background: none; border: none; color: #475569;
       cursor: pointer; font-size: 1.1rem; line-height: 1; padding: 0;
     }
     .panel-close:hover { color: #cbd5e1; }
-    .panel-author-header { display: flex; flex-direction: column; gap: .3rem; }
+    .panel-author-header { display: flex; flex-direction: column; gap: .3rem; flex-shrink: 0; }
     .panel-color-bar { height: 3px; border-radius: 2px; margin-bottom: .25rem; }
     .panel-name { font-size: 1rem; font-weight: 600; color: #f1f5f9; word-break: break-all; }
     .panel-email { font-size: .75rem; color: #64748b; word-break: break-all; }
-    .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .6rem; }
+    .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .6rem; flex-shrink: 0; }
     .stat {
       background: #0f172a; border-radius: .5rem; padding: .6rem .7rem;
       display: flex; flex-direction: column; gap: .15rem;
@@ -66,8 +68,44 @@
     .stat.full { grid-column: 1 / -1; }
     .stat-value { font-size: .95rem; font-weight: 700; color: #f1f5f9; }
     .stat-label { font-size: .68rem; color: #475569; text-transform: uppercase; letter-spacing: .04em; }
-    .sparkline-wrap { flex: 1; min-height: 80px; }
-    .panel-hint { font-size: .72rem; color: #334155; text-align: center; }
+    .sparkline-wrap { flex: 1; min-height: 0; }
+    .panel-hint { font-size: .72rem; color: #334155; text-align: center; flex-shrink: 0; }
+    /* others breakdown */
+    .members-list {
+      display: flex; flex-direction: column; gap: .3rem;
+      overflow-y: auto; flex: 1; min-height: 0; /* scroll, don't expand */
+    }
+    .member-row {
+      display: flex; justify-content: space-between; align-items: baseline;
+      padding: .3rem .6rem; background: #0f172a; border-radius: .4rem; font-size: .8rem;
+      gap: .5rem; flex-shrink: 0;
+    }
+    .member-name { color: #cbd5e1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .member-lines { color: #64748b; font-variant-numeric: tabular-nums; flex-shrink: 0; }
+    /* author search */
+    .search-wrap { position: relative; }
+    .search-input {
+      background: #0f172a; border: 1px solid #334155; border-radius: .4rem;
+      color: #e2e8f0; font-size: .8rem; padding: .3rem .7rem; width: 200px;
+      font-family: inherit; outline: none;
+      transition: border-color .15s;
+    }
+    .search-input:focus { border-color: #3b82f6; }
+    .search-input::placeholder { color: #334155; }
+    .search-dropdown {
+      position: absolute; top: calc(100% + 4px); right: 0; z-index: 100;
+      background: #1e293b; border: 1px solid #334155; border-radius: .5rem;
+      min-width: 260px; max-height: 260px; overflow-y: auto;
+      box-shadow: 0 8px 24px rgba(0,0,0,.5);
+    }
+    .search-dropdown.hidden { display: none; }
+    .search-result {
+      display: flex; justify-content: space-between; align-items: baseline;
+      padding: .45rem .75rem; cursor: pointer; font-size: .8rem; gap: .75rem;
+    }
+    .search-result:hover { background: #334155; }
+    .search-result-name { color: #e2e8f0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .search-result-meta { color: #64748b; font-size: .72rem; flex-shrink: 0; }
   </style>
 </head>
 <body>
@@ -90,7 +128,11 @@
           <button class="toggle-btn active" id="btn-pct" onclick="setMode('pct')">% Share</button>
           <button class="toggle-btn"        id="btn-abs" onclick="setMode('abs')">Line Count</button>
         </div>
-        <span style="font-size:.75rem;color:#334155">click a legend item for details</span>
+        <div class="search-wrap">
+          <input class="search-input" id="author-search" type="text"
+                 placeholder="Search author…" autocomplete="off" oninput="onSearch(event)">
+          <div class="search-dropdown hidden" id="search-dropdown"></div>
+        </div>
       </div>
       <div class="chart-wrap"><canvas id="chart"></canvas></div>
     </div>
@@ -103,8 +145,9 @@
         <div class="panel-email" id="panel-email"></div>
       </div>
       <div class="stats-grid" id="panel-stats"></div>
-      <div class="sparkline-wrap"><canvas id="sparkline"></canvas></div>
-      <div class="panel-hint">own line count over time</div>
+      <div id="panel-sparkline-wrap" class="sparkline-wrap"><canvas id="sparkline"></canvas></div>
+      <div id="panel-members-wrap" class="members-list" style="display:none"></div>
+      <div class="panel-hint" id="panel-hint">own line count over time</div>
     </div>
   </div>
 
@@ -125,6 +168,53 @@
     function currentData(ds) {
       return mode === 'pct' ? ds.pctData : ds.absData;
     }
+
+    // ── search index ──────────────────────────────────────────────────────────
+    // Flat list of every author (including those inside Others) for search.
+    const searchIdx = (() => {
+      const idx = [];
+      DATA.datasets.forEach((ds, i) => {
+        if (ds.members && ds.members.length > 0) {
+          ds.members.forEach(m => idx.push({
+            name: m.name, email: m.email, lines: m.finalLines, dsIdx: i, inOthers: true,
+          }));
+        } else {
+          const last = ds.absData.length - 1;
+          idx.push({ name: ds.label, email: ds.email, lines: ds.absData[last], dsIdx: i, inOthers: false });
+        }
+      });
+      return idx;
+    })();
+
+    function onSearch(e) {
+      const q = e.target.value.trim().toLowerCase();
+      const dd = document.getElementById('search-dropdown');
+      if (!q) { dd.classList.add('hidden'); return; }
+      const hits = searchIdx
+        .filter(r => r.name.toLowerCase().includes(q) || r.email.toLowerCase().includes(q))
+        .sort((a, b) => b.lines - a.lines)
+        .slice(0, 12);
+      if (!hits.length) { dd.classList.add('hidden'); return; }
+      dd.innerHTML = hits.map(r =>
+        '<div class="search-result" onclick="pickSearch(' + r.dsIdx + ')">' +
+        '<span class="search-result-name">' + r.name + '</span>' +
+        '<span class="search-result-meta">' + fmtLines(r.lines) +
+          (r.inOthers ? ' · Others' : '') + '</span>' +
+        '</div>'
+      ).join('');
+      dd.classList.remove('hidden');
+    }
+
+    function pickSearch(dsIdx) {
+      showPanel(dsIdx);
+      document.getElementById('author-search').value = '';
+      document.getElementById('search-dropdown').classList.add('hidden');
+    }
+
+    document.addEventListener('click', e => {
+      if (!e.target.closest('.search-wrap'))
+        document.getElementById('search-dropdown').classList.add('hidden');
+    });
 
     // ── build Chart.js datasets from DATA ─────────────────────────────────────
     function makeChartDatasets() {
@@ -167,13 +257,31 @@
         animation: false,
         interaction: { mode: 'index', intersect: false },
         onHover(evt) {
-          // Find which band the cursor is physically inside using 'nearest' mode.
-          // This runs before the tooltip renders, so the callback below can read it.
-          if (evt.native) {
-            const els = chart.getElementsAtEventForMode(
-              evt.native, 'nearest', { intersect: false }, true
-            );
-            hoveredDatasetIdx = els.length > 0 ? els[0].datasetIndex : -1;
+          // Determine which stacked band the cursor is physically inside.
+          // 'nearest' picks the closest point, not the visual area — instead we
+          // accumulate stacked values at the hovered x index and find the band
+          // whose pixel range brackets the cursor's y coordinate.
+          if (!evt.native) return;
+          const pos = Chart.helpers.getRelativePosition(evt.native, chart);
+          const xEls = chart.getElementsAtEventForMode(
+            evt.native, 'index', { intersect: false }, true
+          );
+          if (!xEls.length) { hoveredDatasetIdx = -1; return; }
+          const xIdx = xEls[0].index;
+          const yScale = chart.scales.y;
+          const datasets = chart.data.datasets;
+          let cumulative = 0;
+          hoveredDatasetIdx = -1;
+          for (let i = 0; i < datasets.length; i++) {
+            const val = datasets[i].data[xIdx] || 0;
+            const pixelBottom = yScale.getPixelForValue(cumulative);
+            cumulative += val;
+            const pixelTop = yScale.getPixelForValue(cumulative);
+            // Canvas y grows downward: pixelTop < pixelBottom
+            if (pos.y >= pixelTop && pos.y <= pixelBottom) {
+              hoveredDatasetIdx = i;
+              break;
+            }
           }
         },
         onClick() {
@@ -251,29 +359,24 @@
       const abs  = ds.absData;
       const last = abs.length - 1;
 
-      // Compute stats from raw data
+      // Compute stats
       let peak = 0, peakIdx = 0, firstIdx = -1;
       for (let i = 0; i <= last; i++) {
         if (abs[i] > peak) { peak = abs[i]; peakIdx = i; }
         if (firstIdx < 0 && abs[i] > 0) firstIdx = i;
       }
-
       const finalLines = abs[last];
       const totalNow   = DATA.datasets.reduce((s, d) => s + (d.absData[last] || 0), 0);
       const finalPct   = totalNow > 0 ? finalLines / totalNow * 100 : 0;
-
-      let totalAtPeak = 0;
+      let totalAtPeak  = 0;
       DATA.datasets.forEach(d => totalAtPeak += d.absData[peakIdx] || 0);
-      const peakPct = totalAtPeak > 0 ? peak / totalAtPeak * 100 : 0;
+      const peakPct    = totalAtPeak > 0 ? peak / totalAtPeak * 100 : 0;
+      const firstDate  = firstIdx >= 0 ? DATA.labels[firstIdx].split(' ')[0] : '—';
+      const lastDate   = DATA.labels[last].split(' ')[0];
 
-      const firstDate = firstIdx >= 0 ? DATA.labels[firstIdx].split(' ')[0] : '—';
-      const lastDate  = DATA.labels[last].split(' ')[0];
-
-      // Populate panel
       document.getElementById('panel-color-bar').style.background = ds.borderColor;
       document.getElementById('panel-name').textContent  = ds.label;
       document.getElementById('panel-email').textContent = ds.email;
-
       document.getElementById('panel-stats').innerHTML =
         stat(fmtLines(finalLines), 'current lines') +
         stat(fmtPct(finalPct),     'current share') +
@@ -282,11 +385,32 @@
         stat(firstDate,            'first commit', true) +
         stat(lastDate,             'last commit',  true);
 
+      const sparkWrap   = document.getElementById('panel-sparkline-wrap');
+      const membersWrap = document.getElementById('panel-members-wrap');
+      const hint        = document.getElementById('panel-hint');
+
+      if (ds.members && ds.members.length > 0) {
+        // "Others" group — show member breakdown instead of sparkline
+        sparkWrap.style.display   = 'none';
+        membersWrap.style.display = 'flex';
+        hint.textContent = 'sorted by current line count';
+        membersWrap.innerHTML = ds.members.map(m =>
+          '<div class="member-row">' +
+          '<span class="member-name" title="' + m.email + '">' + m.name + '</span>' +
+          '<span class="member-lines">' + fmtLines(m.finalLines) + '</span>' +
+          '</div>'
+        ).join('');
+        if (sparkChart) { sparkChart.destroy(); sparkChart = null; }
+      } else {
+        sparkWrap.style.display   = '';
+        membersWrap.style.display = 'none';
+        hint.textContent = 'own line count over time';
+        drawSparkline(idx);
+      }
+
       const panel = document.getElementById('author-panel');
       panel.dataset.authorIdx = idx;
       panel.classList.remove('hidden');
-
-      drawSparkline(idx);
     }
 
     function stat(value, label, full) {
