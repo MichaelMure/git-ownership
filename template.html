@@ -29,7 +29,6 @@
     .card-toolbar {
       display: flex; align-items: center; gap: .6rem; flex-shrink: 0;
     }
-    .card-toolbar .search-wrap { margin-left: auto; }
     .chart-wrap { position: relative; flex: 1; min-height: 300px; }
 
     /* mode toggle */
@@ -41,6 +40,53 @@
     }
     .toggle-btn.active { background: #3b82f6; color: #fff; }
     .toggle-btn:hover:not(.active) { background: #1e3a5f; color: #e2e8f0; }
+
+    /* bands control */
+    .bands-control { display: flex; align-items: center; gap: .4rem; flex-shrink: 0; }
+    .bands-label { font-size: .75rem; color: #64748b; }
+    .bands-slider { width: 72px; accent-color: #3b82f6; cursor: pointer; }
+    .bands-input {
+      width: 46px; background: #0f172a; border: 1px solid #475569; border-radius: .4rem;
+      color: #e2e8f0; font-size: .8rem; padding: .25rem .4rem; font-family: inherit;
+      outline: none; text-align: center; transition: border-color .15s;
+    }
+    .bands-input:focus { border-color: #3b82f6; }
+    .bands-input::-webkit-outer-spin-button,
+    .bands-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+    .bands-input { -moz-appearance: textfield; }
+
+    /* toolbar zones */
+    .toolbar-left  { display: flex; align-items: center; gap: .6rem; flex: 1; }
+    .toolbar-center{ display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .toolbar-right { display: flex; align-items: center; justify-content: flex-end; flex: 1; }
+    /* folder dropdown button */
+    .folder-btn {
+      background: #0f172a; border: 1px solid #475569; border-radius: .4rem;
+      color: #e2e8f0; font-size: .8rem; padding: .3rem .75rem;
+      font-family: inherit; cursor: pointer; outline: none; white-space: nowrap;
+      display: flex; align-items: center; gap: .4rem;
+      transition: border-color .15s;
+    }
+    .folder-btn:hover, .folder-btn.open { border-color: #3b82f6; }
+    .folder-dropdown-wrap { position: relative; }
+    /* folder tree menu */
+    .folder-menu {
+      position: absolute; top: calc(100% + 4px); left: 50%; transform: translateX(-50%);
+      z-index: 200; background: #1e293b; border: 1px solid #334155; border-radius: .5rem;
+      min-width: 220px; max-height: 360px; overflow-y: auto;
+      box-shadow: 0 8px 24px rgba(0,0,0,.5); padding: .25rem 0;
+    }
+    .folder-menu.hidden { display: none; }
+    .folder-item {
+      display: flex; align-items: baseline; padding: .35rem .75rem; cursor: pointer;
+      font-size: .8rem; color: #cbd5e1; white-space: pre; font-family: monospace;
+    }
+    .folder-item:hover { background: #334155; }
+    .folder-item.active { color: #60a5fa; font-weight: 600; }
+    .folder-item.active:hover { background: #1e3a5f; }
+    .folder-item.ancestor { color: #64748b; cursor: default; }
+    .folder-item.ancestor:hover { background: transparent; }
+    .tree-pfx { color: #475569; }
 
     /* author info panel */
     .author-panel {
@@ -79,8 +125,9 @@
     .member-row {
       display: flex; justify-content: space-between; align-items: baseline;
       padding: .3rem .6rem; background: #0f172a; border-radius: .4rem; font-size: .8rem;
-      gap: .5rem; flex-shrink: 0;
+      gap: .5rem; flex-shrink: 0; cursor: pointer;
     }
+    .member-row:hover { background: #1e3a5f; }
     .member-row.highlighted { background: #1e3a5f; outline: 1px solid #3b82f6; }
     .member-name { color: #cbd5e1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .member-lines { color: #94a3b8; font-variant-numeric: tabular-nums; flex-shrink: 0; }
@@ -116,9 +163,10 @@
     <div class="meta">
       <div>repo: <span>{{.Repo}}</span></div>
       <div>branch: <span>{{.Branch}}</span></div>
+      <div>hash: <span>{{.LastCommit}}</span></div>
       <div>commits: <span>{{.TotalCommits}}</span></div>
       <div>snapshots: <span>{{.Samples}}</span></div>
-      <div>authors: <span>{{.Authors}}</span></div>
+      <div>authors: <span id="author-count">{{.Authors}}</span></div>
       <div>generated: <span>{{.Generated}}</span></div>
     </div>
   </header>
@@ -126,18 +174,36 @@
   <div class="body-row">
     <div class="card">
       <div class="card-toolbar">
-        <div class="toggle-group">
-          <button class="toggle-btn active" id="btn-abs" onclick="setMode('abs')">Line Count</button>
-          <button class="toggle-btn"        id="btn-pct" onclick="setMode('pct')">% Share</button>
+        <div class="toolbar-left">
+          <div class="toggle-group">
+            <button class="toggle-btn active" id="btn-abs" onclick="setMode('abs')">Line Count</button>
+            <button class="toggle-btn"        id="btn-pct" onclick="setMode('pct')">% Share</button>
+          </div>
+          <div class="toggle-group">
+            <button class="toggle-btn active" id="btn-x-commits" onclick="setXMode('commits')">Commits</button>
+            <button class="toggle-btn"        id="btn-x-time"    onclick="setXMode('time')">Time</button>
+          </div>
         </div>
-        <div class="toggle-group">
-          <button class="toggle-btn active" id="btn-x-commits" onclick="setXMode('commits')">Commits</button>
-          <button class="toggle-btn"        id="btn-x-time"    onclick="setXMode('time')">Time</button>
+        <div class="toolbar-center">
+          <div class="folder-dropdown-wrap" id="folder-dropdown-wrap" style="display:none">
+            <button class="folder-btn" id="folder-btn" onclick="toggleFolderMenu()">
+              <span id="folder-btn-label">whole repo</span>
+              <span style="color:#64748b;font-size:.7rem">▾</span>
+            </button>
+            <div class="folder-menu hidden" id="folder-menu"></div>
+          </div>
         </div>
-        <div class="search-wrap">
-          <input class="search-input" id="author-search" type="text"
-                 placeholder="Search author…" autocomplete="off" oninput="onSearch(event)">
-          <div class="search-dropdown hidden" id="search-dropdown"></div>
+        <div class="toolbar-right">
+          <div class="bands-control">
+            <span class="bands-label">bands</span>
+            <input type="range"  class="bands-slider" id="bands-slider" min="1" oninput="setBands(+this.value)">
+            <input type="number" class="bands-input"  id="bands-input"  min="1" oninput="setBands(+this.value)">
+          </div>
+          <div class="search-wrap">
+            <input class="search-input" id="author-search" type="text"
+                   placeholder="Search author…" autocomplete="off" oninput="onSearch(event)">
+            <div class="search-dropdown hidden" id="search-dropdown"></div>
+          </div>
         </div>
       </div>
       <div class="chart-wrap"><canvas id="chart"></canvas></div>
@@ -158,11 +224,48 @@
   </div>
 
   <script>
-    const DATA = {{.DataJSON}};
+    const FOLDERS = {{.FoldersJSON}};
+    let DATA = FOLDERS[0].chart;
     let mode  = 'abs';
     let xMode = 'commits'; // 'commits' (even spacing) | 'time' (linear calendar)
     let sparkChart = null;
     let hoveredDatasetIdx = -1;
+    let currentFolderIdx = 0;
+    let currentBands = Math.min(20, DATA.datasets.length);
+
+    // ── displayDatasets ───────────────────────────────────────────────────────
+    // Returns the top-currentBands individual datasets plus a synthetic Others
+    // band aggregating the rest. JS owns the Others grouping; Go only stores
+    // individual author datasets (up to --max-graph).
+    function displayDatasets() {
+      const all = DATA.datasets;
+      const n   = Math.min(currentBands, all.length);
+      const major = all.slice(0, n);
+      const minor = all.slice(n);
+      if (minor.length === 0) return major;
+      const len = all[0].absData.length;
+      const othersAbs = new Array(len).fill(0);
+      const othersPct = new Array(len).fill(0);
+      for (const ds of minor) {
+        for (let i = 0; i < len; i++) {
+          othersAbs[i] += ds.absData[i] || 0;
+          othersPct[i] += ds.pctData[i] || 0;
+        }
+      }
+      return [...major, {
+        label:           'Others (' + minor.length + ' authors)',
+        email:           '',
+        absData:         othersAbs,
+        pctData:         othersPct,
+        fill:            true,
+        backgroundColor: 'rgba(148,163,184,0.45)',
+        borderColor:     '#94a3b8',
+        borderWidth:     1,
+        tension:         0.3,
+        isOthers:        true,
+        minorStart:      n,
+      }];
+    }
 
     // Unix-ms timestamp for each snapshot, parsed from the "YYYY-MM-DD hash" label.
     const timestamps = DATA.labels.map(l => new Date(l.slice(0, 10)).getTime());
@@ -200,21 +303,15 @@
     }
 
     // ── search index ──────────────────────────────────────────────────────────
-    // Flat list of every author (including those inside Others) for search.
-    const searchIdx = (() => {
-      const idx = [];
-      DATA.datasets.forEach((ds, i) => {
-        if (ds.members && ds.members.length > 0) {
-          ds.members.forEach(m => idx.push({
-            name: m.name, email: m.email, lines: m.finalLines, dsIdx: i, inOthers: true,
-          }));
-        } else {
-          const last = ds.absData.length - 1;
-          idx.push({ name: ds.label, email: ds.email, lines: ds.absData[last], dsIdx: i, inOthers: false });
-        }
-      });
-      return idx;
-    })();
+    // All included authors as individual entries (no Others nesting).
+    function buildSearchIdx() {
+      return DATA.datasets.map((ds, rawIdx) => ({
+        name: ds.label, email: ds.email,
+        lines: ds.absData[ds.absData.length - 1],
+        rawIdx,
+      }));
+    }
+    let searchIdx = buildSearchIdx();
 
     function onSearch(e) {
       const q = e.target.value.trim().toLowerCase();
@@ -229,7 +326,7 @@
         '<div class="search-result" data-hit="' + i + '">' +
         '<span class="search-result-name">' + r.name + '</span>' +
         '<span class="search-result-meta">' + fmtLines(r.lines) +
-          (r.inOthers ? ' · Others' : '') + '</span>' +
+          (r.rawIdx >= currentBands ? ' · Others' : '') + '</span>' +
         '</div>'
       ).join('');
       dd.querySelectorAll('.search-result').forEach((el, i) => {
@@ -239,12 +336,7 @@
     }
 
     function pickSearch(hit) {
-      if (hit.inOthers) {
-        const ds = DATA.datasets[hit.dsIdx];
-        const m  = ds.members.find(m => m.name === hit.name);
-        if (m) { showMemberPanel(m); return; }
-      }
-      showPanel(hit.dsIdx);
+      showRawPanel(hit.rawIdx);
       document.getElementById('author-search').value = '';
       document.getElementById('search-dropdown').classList.add('hidden');
     }
@@ -254,15 +346,16 @@
         document.getElementById('search-dropdown').classList.add('hidden');
     });
 
-    // ── build Chart.js datasets from DATA ─────────────────────────────────────
+    // ── build Chart.js datasets from displayDatasets ───────────────────────────
     // Both modes pre-compute cumulative sums and use fill:'-1' so each band's
     // fill covers only its own region (no overlap). This keeps colors identical
     // between commit and time modes (overlapping fills would wash colours out).
     function makeChartDatasets() {
-      const order   = xMode === 'time' ? timeOrder : DATA.datasets[0].absData.map((_, i) => i);
+      const dds     = displayDatasets();
+      const order   = xMode === 'time' ? timeOrder : dds[0].absData.map((_, i) => i);
       const n       = order.length;
       const cumulative = new Float64Array(n);
-      return DATA.datasets.map((ds, dsIdx) => {
+      return dds.map((ds, dsIdx) => {
         const vals   = currentData(ds);
         const rawData = order.map(i => vals[i]);
         const data    = rawData.map((v, j) => {
@@ -275,7 +368,7 @@
           label:           ds.label,
           data,
           rawData,
-          fill:            'origin',
+          fill:            dsIdx === 0 ? 'origin' : '-1',
           backgroundColor: ds.backgroundColor,
           borderColor:     ds.borderColor,
           borderWidth:     ds.borderWidth,
@@ -310,12 +403,28 @@
       options: chartOptions(),
     });
 
+    // Initialise bands controls and author count
+    (() => {
+      const max = FOLDERS[0].chart.datasets.length;
+      const slider = document.getElementById('bands-slider');
+      slider.max = max; slider.value = currentBands;
+      document.getElementById('bands-input').value = currentBands;
+      document.getElementById('author-count').textContent = DATA.datasets.length;
+    })();
+
     function applyXMode() {
       // In time mode data points carry their own x value; labels array is unused.
       chart.data.labels   = xMode === 'time' ? [] : DATA.labels;
       chart.data.datasets = makeChartDatasets();
       chart.options       = chartOptions();
       chart.update();
+    }
+
+    function setBands(n) {
+      currentBands = Math.max(1, n);
+      document.getElementById('bands-slider').value = currentBands;
+      document.getElementById('bands-input').value  = currentBands;
+      applyXMode();
     }
 
     function chartOptions() {
@@ -439,7 +548,7 @@
       const panel = document.getElementById('author-panel');
       if (!panel.classList.contains('hidden')) {
         const idx = panel.dataset.authorIdx;
-        if (idx !== undefined) drawSparkline(+idx);
+        if (idx !== undefined && idx !== '') drawSparkline(+idx);
       }
     }
 
@@ -450,73 +559,183 @@
       applyXMode();
     }
 
-    // ── author panel ───────────────────────────────────────────────────────────
-    function showMemberPanel(m) {
-      const last       = m.absData.length - 1;
-      const finalLines = m.absData[last];
-      const totalNow   = DATA.datasets.reduce((s, d) => s + (d.absData[last] || 0), 0);
-      const finalPct   = totalNow > 0 ? finalLines / totalNow * 100 : 0;
-      let peak = 0, peakIdx = 0, firstIdx = -1;
-      for (let i = 0; i <= last; i++) {
-        if (m.absData[i] > peak) { peak = m.absData[i]; peakIdx = i; }
-        if (firstIdx < 0 && m.absData[i] > 0) firstIdx = i;
-      }
-      let totalAtPeak = 0;
-      DATA.datasets.forEach(d => totalAtPeak += d.absData[peakIdx] || 0);
-      const peakPct   = totalAtPeak > 0 ? peak / totalAtPeak * 100 : 0;
-      const firstDate = firstIdx >= 0 ? DATA.labels[firstIdx].split(' ')[0] : '—';
-      const lastDate  = DATA.labels[last].split(' ')[0];
-
-      document.getElementById('panel-color-bar').style.background = '#94a3b8';
-      document.getElementById('panel-name').textContent  = m.name;
-      document.getElementById('panel-email').textContent = m.email;
-      document.getElementById('panel-stats').innerHTML =
-        stat(fmtLines(finalLines), 'current lines') +
-        stat(fmtPct(finalPct),     'current share') +
-        stat(fmtLines(peak),       'peak lines') +
-        stat(fmtPct(peakPct),      'peak share') +
-        stat(firstDate,            'first commit', true) +
-        stat(lastDate,             'last commit',  true);
-
-      document.getElementById('panel-sparkline-wrap').style.display = '';
-      document.getElementById('panel-members-wrap').style.display   = 'none';
-      document.getElementById('panel-hint').textContent = 'own line count over time · Others';
-
+    // ── folder selector ───────────────────────────────────────────────────────
+    function selectFolder(idx) {
+      currentFolderIdx = idx;
+      DATA = FOLDERS[idx].chart;
+      searchIdx = buildSearchIdx();
+      document.getElementById('author-count').textContent = DATA.datasets.length;
+      document.getElementById('author-panel').classList.add('hidden');
       if (sparkChart) { sparkChart.destroy(); sparkChart = null; }
-      const data = mode === 'pct' ? m.pctData : m.absData;
-      const isPct = mode === 'pct';
-      sparkChart = new Chart(document.getElementById('sparkline'), {
-        type: 'line',
-        data: {
-          labels: DATA.labels,
-          datasets: [{ data, fill: true, backgroundColor: 'rgba(148,163,184,0.3)',
-            borderColor: '#94a3b8', borderWidth: 1.5, pointRadius: 0, tension: 0.3 }],
-        },
-        options: {
-          animation: false, responsive: true, maintainAspectRatio: false,
-          plugins: { legend: { display: false }, tooltip: {
-            callbacks: { label: ctx => isPct ? fmtPct(ctx.parsed.y) : fmtLines(ctx.parsed.y) },
-          }},
-          scales: {
-            x: { display: false },
-            y: { display: false, min: 0 },
-          },
-        },
-      });
-
-      const panel = document.getElementById('author-panel');
-      panel.dataset.authorIdx = '';
-      panel.classList.remove('hidden');
-      document.getElementById('author-search').value = '';
-      document.getElementById('search-dropdown').classList.add('hidden');
+      updateFolderBtn();
+      applyXMode();
     }
 
-    function showPanel(idx, highlightMember) {
-      const ds   = DATA.datasets[idx];
+    function updateFolderBtn() {
+      const path = FOLDERS[currentFolderIdx].path;
+      document.getElementById('folder-btn-label').textContent =
+        path === '/' ? 'whole repo' : path.split('/').pop() + '/';
+    }
+
+    function toggleFolderMenu() {
+      const menu = document.getElementById('folder-menu');
+      const btn  = document.getElementById('folder-btn');
+      const opening = menu.classList.toggle('hidden');  // true = now hidden = was open
+      btn.classList.toggle('open', !opening);           // open class when visible
+      if (!opening) renderFolderMenu();                 // rebuild on open
+    }
+
+    function buildMenuNodes() {
+      // Build a flat sorted list of all tree nodes (FOLDERS paths + ancestor dirs).
+      const nodeMap = new Map();
+      // "/" is always index 0 in FOLDERS; handle it specially (depth = -1 sentinel)
+      nodeMap.set('/', { path: '/', folderIdx: 0, depth: -1 });
+      FOLDERS.slice(1).forEach((f, fi) => {
+        const parts = f.path.split('/');
+        for (let d = 0; d < parts.length; d++) {
+          const path = parts.slice(0, d + 1).join('/');
+          if (!nodeMap.has(path)) nodeMap.set(path, { path, folderIdx: -1, depth: d });
+        }
+        nodeMap.get(f.path).folderIdx = fi + 1;  // fi+1 because we skipped index 0 ("/")
+      });
+      return [...nodeMap.values()].sort((a, b) => {
+        if (a.path === '/') return -1;
+        if (b.path === '/') return 1;
+        return a.path.localeCompare(b.path);
+      });
+    }
+
+    function renderFolderMenu() {
+      const allNodes  = buildMenuNodes();
+      const treeNodes = allNodes.filter(n => n.path !== '/');  // exclude "/" from tree calcs
+
+      function hasLaterSiblingAt(ti, level) {
+        const parts = treeNodes[ti].path.split('/');
+        if (level >= parts.length) return false;
+        const myAncestor = parts.slice(0, level + 1).join('/');
+        const parentPath = parts.slice(0, level).join('/');
+        for (let j = ti + 1; j < treeNodes.length; j++) {
+          const op = treeNodes[j].path.split('/');
+          if (op.length > level &&
+              op.slice(0, level).join('/') === parentPath &&
+              op.slice(0, level + 1).join('/') !== myAncestor) return true;
+        }
+        return false;
+      }
+
+      function isLastSibling(ti) {
+        const n = treeNodes[ti];
+        const myParent = n.path.split('/').slice(0, n.depth).join('/');
+        for (let j = ti + 1; j < treeNodes.length; j++) {
+          const o = treeNodes[j];
+          if (o.depth === n.depth &&
+              o.path.split('/').slice(0, o.depth).join('/') === myParent) return false;
+        }
+        return true;
+      }
+
+      let html = '';
+      // "/" entry — always at the top, no tree connectors
+      html += `<div class="folder-item${currentFolderIdx === 0 ? ' active' : ''}" data-idx="0">/ &nbsp;<span style="color:#64748b;font-size:.72rem">whole repo</span></div>`;
+
+      treeNodes.forEach((n, ti) => {
+        const name = n.path.split('/').pop();
+        let prefix = '';
+        for (let level = 0; level < n.depth; level++)
+          prefix += hasLaterSiblingAt(ti, level) ? '│   ' : '    ';
+        const connector = isLastSibling(ti) ? '└── ' : '├── ';
+        const isActive   = n.folderIdx === currentFolderIdx;
+        const isAncestor = n.folderIdx < 0;
+        const cls = 'folder-item' + (isActive ? ' active' : '') + (isAncestor ? ' ancestor' : '');
+        const idx = n.folderIdx >= 0 ? `data-idx="${n.folderIdx}"` : '';
+        html += `<div class="${cls}" ${idx}><span class="tree-pfx">${prefix}${connector}</span>${name}/</div>`;
+      });
+
+      const menu = document.getElementById('folder-menu');
+      menu.innerHTML = html;
+      menu.querySelectorAll('.folder-item[data-idx]').forEach(el => {
+        el.addEventListener('click', () => {
+          selectFolder(+el.dataset.idx);
+          document.getElementById('folder-menu').classList.add('hidden');
+          document.getElementById('folder-btn').classList.remove('open');
+        });
+      });
+    }
+
+    // Initialise folder dropdown (hidden when only one folder).
+    (() => {
+      if (FOLDERS.length <= 1) return;
+      document.getElementById('folder-dropdown-wrap').style.display = '';
+      document.addEventListener('click', e => {
+        if (!e.target.closest('#folder-dropdown-wrap')) {
+          document.getElementById('folder-menu').classList.add('hidden');
+          document.getElementById('folder-btn').classList.remove('open');
+        }
+      });
+    })();
+
+    // ── author panel ───────────────────────────────────────────────────────────
+
+    // showPanel: display index into displayDatasets() — used by chart click / legend.
+    function showPanel(displayIdx, highlightMember) {
+      const dd = displayDatasets();
+      const ds = dd[displayIdx];
+
+      if (ds.isOthers) {
+        // Others band — show aggregated stats + scrollable member list.
+        const abs  = ds.absData;
+        const last = abs.length - 1;
+        const finalLines = abs[last];
+        const totalNow   = dd.reduce((s, d) => s + (d.absData[last] || 0), 0);
+        const finalPct   = totalNow > 0 ? finalLines / totalNow * 100 : 0;
+
+        document.getElementById('panel-color-bar').style.background = '#94a3b8';
+        document.getElementById('panel-name').textContent  = ds.label;
+        document.getElementById('panel-email').textContent = '';
+        document.getElementById('panel-stats').innerHTML =
+          stat(fmtLines(finalLines), 'current lines') +
+          stat(fmtPct(finalPct),     'current share');
+
+        document.getElementById('panel-sparkline-wrap').style.display = 'none';
+        const membersWrap = document.getElementById('panel-members-wrap');
+        membersWrap.style.display = 'flex';
+        document.getElementById('panel-hint').textContent = 'sorted by current line count — click for details';
+        if (sparkChart) { sparkChart.destroy(); sparkChart = null; }
+
+        const minor = DATA.datasets.slice(ds.minorStart)
+          .map((m, i) => ({ m, rawIdx: ds.minorStart + i, lines: m.absData[last] }))
+          .sort((a, b) => b.lines - a.lines);
+        membersWrap.innerHTML = minor.map(({ m, rawIdx, lines }) =>
+          '<div class="member-row' + (highlightMember === m.label ? ' highlighted' : '') +
+          '" data-raw-idx="' + rawIdx + '">' +
+          '<span class="member-name" title="' + m.email + '">' + m.label + '</span>' +
+          '<span class="member-lines">' + fmtLines(lines) + '</span>' +
+          '</div>'
+        ).join('');
+        membersWrap.querySelectorAll('.member-row').forEach(el => {
+          el.addEventListener('click', () => showRawPanel(+el.dataset.rawIdx));
+        });
+        if (highlightMember) {
+          const row = membersWrap.querySelector('.highlighted');
+          if (row) row.scrollIntoView({ block: 'nearest' });
+        }
+
+        const panel = document.getElementById('author-panel');
+        panel.dataset.authorIdx = '';
+        panel.classList.remove('hidden');
+      } else {
+        // Individual author band — displayIdx === rawIdx for the major slice.
+        showRawPanel(displayIdx);
+      }
+    }
+
+    // showRawPanel: raw index into DATA.datasets — shows full stats + sparkline.
+    // Used for individual bands, Others members, and search results.
+    function showRawPanel(rawIdx) {
+      const ds   = DATA.datasets[rawIdx];
       const abs  = ds.absData;
       const last = abs.length - 1;
 
-      // Compute stats
       let peak = 0, peakIdx = 0, firstIdx = -1;
       for (let i = 0; i <= last; i++) {
         if (abs[i] > peak) { peak = abs[i]; peakIdx = i; }
@@ -542,36 +761,18 @@
         stat(firstDate,            'first commit', true) +
         stat(lastDate,             'last commit',  true);
 
-      const sparkWrap   = document.getElementById('panel-sparkline-wrap');
-      const membersWrap = document.getElementById('panel-members-wrap');
-      const hint        = document.getElementById('panel-hint');
-
-      if (ds.members && ds.members.length > 0) {
-        // "Others" group — show member breakdown instead of sparkline
-        sparkWrap.style.display   = 'none';
-        membersWrap.style.display = 'flex';
-        hint.textContent = 'sorted by current line count';
-        membersWrap.innerHTML = ds.members.map(m =>
-          '<div class="member-row' + (highlightMember === m.name ? ' highlighted' : '') + '">' +
-          '<span class="member-name" title="' + m.email + '">' + m.name + '</span>' +
-          '<span class="member-lines">' + fmtLines(m.finalLines) + '</span>' +
-          '</div>'
-        ).join('');
-        if (highlightMember) {
-          const row = membersWrap.querySelector('.highlighted');
-          if (row) row.scrollIntoView({ block: 'nearest' });
-        }
-        if (sparkChart) { sparkChart.destroy(); sparkChart = null; }
-      } else {
-        sparkWrap.style.display   = '';
-        membersWrap.style.display = 'none';
-        hint.textContent = 'own line count over time';
-        drawSparkline(idx);
-      }
+      document.getElementById('panel-sparkline-wrap').style.display = '';
+      document.getElementById('panel-members-wrap').style.display   = 'none';
+      const inOthers = rawIdx >= currentBands;
+      document.getElementById('panel-hint').textContent =
+        inOthers ? 'part of Others — increase bands to show individually' : 'own line count over time';
+      drawSparkline(rawIdx);
 
       const panel = document.getElementById('author-panel');
-      panel.dataset.authorIdx = idx;
+      panel.dataset.authorIdx = rawIdx;
       panel.classList.remove('hidden');
+      document.getElementById('author-search').value = '';
+      document.getElementById('search-dropdown').classList.add('hidden');
     }
 
     function stat(value, label, full) {

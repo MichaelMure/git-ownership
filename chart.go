@@ -9,23 +9,73 @@ import (
 )
 
 type Snapshot struct {
-	Label  string
-	Totals map[string]int
-	Total  int
+	Label     string
+	Totals    map[string]int            // global author → lines
+	Total     int                       // total lines across all authors
+	DirTotals map[string]map[string]int // root-dir → author → lines (not serialised)
 }
 
-// member is one author inside the "Others" group.
-type member struct {
-	Name       string    `json:"name"`
-	Email      string    `json:"email"`
-	FinalLines int       `json:"finalLines"`
-	AbsData    []float64 `json:"absData"`
-	PctData    []float64 `json:"pctData"`
+// folderData is one entry in the per-folder chart array embedded in the HTML.
+type folderData struct {
+	Path  string    `json:"path"`
+	Chart chartData `json:"chart"`
 }
+
+// buildAllFolderData builds chart data for "/" (whole repo) followed by one
+// entry per selected directory, in the order provided by selectedDirs.
+func buildAllFolderData(snaps []Snapshot, emailToName map[string]string, maxBands int, selectedDirs []string) []folderData {
+	// Compute a stable global author ranking from the root-level snapshots so
+	// that every folder uses the same dataset order and palette colours.
+	displayName := func(email string) string {
+		if n := emailToName[email]; n != "" {
+			return n
+		}
+		if at := strings.LastIndex(email, "@"); at >= 0 {
+			return email[:at]
+		}
+		return email
+	}
+	nameTotals := make(map[string]int)
+	for _, s := range snaps {
+		for email, n := range s.Totals {
+			nameTotals[displayName(email)] += n
+		}
+	}
+	type nameTotal struct{ name string; total int }
+	ranked := make([]nameTotal, 0, len(nameTotals))
+	for name, total := range nameTotals {
+		ranked = append(ranked, nameTotal{name, total})
+	}
+	sort.Slice(ranked, func(i, j int) bool { return ranked[i].total > ranked[j].total })
+	globalRank := make(map[string]int, len(ranked))
+	for i, nt := range ranked {
+		globalRank[nt.name] = i
+	}
+
+	folders := []folderData{
+		{Path: "/", Chart: buildChart(snaps, emailToName, maxBands, globalRank)},
+	}
+	for _, dir := range selectedDirs {
+		dirSnaps := make([]Snapshot, len(snaps))
+		for i, s := range snaps {
+			totals := s.DirTotals[dir]
+			total := 0
+			for _, n := range totals {
+				total += n
+			}
+			dirSnaps[i] = Snapshot{Label: s.Label, Totals: totals, Total: total}
+		}
+		folders = append(folders, folderData{
+			Path:  dir,
+			Chart: buildChart(dirSnaps, emailToName, maxBands, globalRank),
+		})
+	}
+	return folders
+}
+
 
 // chartDataset carries both the % and absolute line-count series for one author,
 // plus display metadata. The JS switches between pctData and absData on toggle.
-// Members is non-nil only for the synthetic "Others" dataset.
 type chartDataset struct {
 	Label           string    `json:"label"`
 	Email           string    `json:"email"`
@@ -36,7 +86,6 @@ type chartDataset struct {
 	BorderColor     string    `json:"borderColor"`
 	BorderWidth     float64   `json:"borderWidth"`
 	Tension         float64   `json:"tension"`
-	Members         []member  `json:"members,omitempty"` // only for the "Others" group
 }
 
 type chartData struct {
@@ -51,16 +100,21 @@ var palette = []string{
 	"#8b5cf6", "#06b6d4", "#84cc16", "#f43f5e", "#0ea5e9",
 }
 
-func hexRGBA(hex string, a float64) string {
+// hexPastel returns a pastel version of a hex colour: 82% original + 18% white.
+func hexPastel(hex string) string {
 	hex = strings.TrimPrefix(hex, "#")
 	var r, g, b int
 	fmt.Sscanf(hex[0:2], "%x", &r)
 	fmt.Sscanf(hex[2:4], "%x", &g)
 	fmt.Sscanf(hex[4:6], "%x", &b)
-	return fmt.Sprintf("rgba(%d,%d,%d,%.2f)", r, g, b, a)
+	return fmt.Sprintf("rgba(%d,%d,%d,0.90)",
+		int(float64(r)*0.82+255*0.18),
+		int(float64(g)*0.82+255*0.18),
+		int(float64(b)*0.82+255*0.18),
+	)
 }
 
-func buildChart(snaps []Snapshot, emailToName map[string]string, minPct float64) chartData {
+func buildChart(snaps []Snapshot, emailToName map[string]string, maxBands int, globalRank map[string]int) chartData {
 	// displayName resolves an email to a human name.
 	displayName := func(email string) string {
 		if n := emailToName[email]; n != "" {
@@ -111,34 +165,36 @@ func buildChart(snaps []Snapshot, emailToName map[string]string, minPct float64)
 		sort.Strings(g.emails) // deterministic order
 		groups = append(groups, g)
 	}
-	sort.Slice(groups, func(i, j int) bool { return groups[i].total > groups[j].total })
+	// Sort by global rank so dataset order (= stack order) is identical across
+	// all folders. Authors absent from globalRank fall back to local total.
+	sort.Slice(groups, func(i, j int) bool {
+		ri, oki := globalRank[groups[i].name]
+		rj, okj := globalRank[groups[j].name]
+		if oki && okj { return ri < rj }
+		if oki { return true }
+		if okj { return false }
+		return groups[i].total > groups[j].total
+	})
 
 	labels := make([]string, len(snaps))
 	for i, s := range snaps {
 		labels[i] = s.Label
 	}
 
-	// Split into major (ever exceeded minPct) and minor (never did).
-	var major, minor []*group
-	for _, g := range groups {
-		var peak float64
-		for _, s := range snaps {
-			if s.Total > 0 {
-				if p := float64(sumSnap(s, g.emails)) / float64(s.Total) * 100; p > peak {
-					peak = p
-				}
-			}
-		}
-		if peak >= minPct {
-			major = append(major, g)
-		} else {
-			minor = append(minor, g)
-		}
+	// Cap to maxBands if specified; JS will handle the Others grouping dynamically.
+	if maxBands > 0 && len(groups) > maxBands {
+		groups = groups[:maxBands]
 	}
 
-	ds := make([]chartDataset, 0, len(major)+1)
-	for i, g := range major {
-		color := palette[i%len(palette)]
+	ds := make([]chartDataset, 0, len(groups))
+	nextUnranked := len(globalRank)
+	for _, g := range groups {
+		rank, ok := globalRank[g.name]
+		if !ok {
+			rank = nextUnranked
+			nextUnranked++
+		}
+		color := palette[rank%len(palette)]
 		pct := make([]float64, len(snaps))
 		abs := make([]float64, len(snaps))
 		for j, s := range snaps {
@@ -154,56 +210,10 @@ func buildChart(snaps []Snapshot, emailToName map[string]string, minPct float64)
 			PctData:         pct,
 			AbsData:         abs,
 			Fill:            true,
-			BackgroundColor: hexRGBA(color, 0.75),
+			BackgroundColor: hexPastel(color),
 			BorderColor:     color,
 			BorderWidth:     1.5,
 			Tension:         0.3,
-		})
-	}
-
-	// Build the "Others" band from all minor groups.
-	if len(minor) > 0 {
-		pct := make([]float64, len(snaps))
-		abs := make([]float64, len(snaps))
-		for j, s := range snaps {
-			for _, g := range minor {
-				abs[j] += float64(sumSnap(s, g.emails))
-			}
-			if s.Total > 0 {
-				pct[j] = abs[j] / float64(s.Total) * 100
-			}
-		}
-		last := snaps[len(snaps)-1]
-		members := make([]member, 0, len(minor))
-		for _, g := range minor {
-			mAbs := make([]float64, len(snaps))
-			mPct := make([]float64, len(snaps))
-			for j, s := range snaps {
-				mAbs[j] = float64(sumSnap(s, g.emails))
-				if s.Total > 0 {
-					mPct[j] = mAbs[j] / float64(s.Total) * 100
-				}
-			}
-			members = append(members, member{
-				Name:       g.name,
-				Email:      strings.Join(g.emails, ", "),
-				FinalLines: sumSnap(last, g.emails),
-				AbsData:    mAbs,
-				PctData:    mPct,
-			})
-		}
-		sort.Slice(members, func(i, j int) bool { return members[i].FinalLines > members[j].FinalLines })
-		ds = append(ds, chartDataset{
-			Label:           fmt.Sprintf("Others (%d authors)", len(minor)),
-			Email:           "",
-			PctData:         pct,
-			AbsData:         abs,
-			Fill:            true,
-			BackgroundColor: hexRGBA("#94a3b8", 0.45),
-			BorderColor:     "#94a3b8",
-			BorderWidth:     1,
-			Tension:         0.3,
-			Members:         members,
 		})
 	}
 

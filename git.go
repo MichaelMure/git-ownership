@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"fmt"
 	"os/exec"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -47,6 +48,94 @@ func commitCount(repo, branch string) (int, error) {
 		return 0, fmt.Errorf("rev-list --count: unexpected output %q", out)
 	}
 	return n, nil
+}
+
+// selectFolders returns the paths of the n folders that best represent the
+// repo's structure, using greedy tree expansion: start from root-level
+// directories and repeatedly expand the largest into its children until n
+// candidates are found. File count proxies for line count (fast, no blame).
+// selectFolders returns selected folder paths and their file counts (proxy for size).
+func selectFolders(repo, branch string, n int) ([]string, map[string]int, int, error) {
+	out, err := gitCmd(repo, "ls-tree", "-r", "--name-only", branch)
+	if err != nil {
+		return nil, nil, 0, err
+	}
+
+	// dirCount[p]    = number of files recursively under p
+	// dirChildren[p] = set of direct child directory paths of p
+	// "" represents the repo root (parent of root-level dirs)
+	dirCount    := make(map[string]int)
+	dirChildren := make(map[string]map[string]struct{})
+	totalFiles  := 0
+
+	for _, file := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		if file == "" {
+			continue
+		}
+		totalFiles++
+		parts := strings.Split(file, "/")
+		for depth := 1; depth < len(parts); depth++ {
+			dir    := strings.Join(parts[:depth], "/")
+			parent := ""
+			if depth > 1 {
+				parent = strings.Join(parts[:depth-1], "/")
+			}
+			dirCount[dir]++
+			if dirChildren[parent] == nil {
+				dirChildren[parent] = make(map[string]struct{})
+			}
+			dirChildren[parent][dir] = struct{}{}
+		}
+	}
+
+	type entry struct {
+		path  string
+		count int
+	}
+
+	// Initialise with root-level directories.
+	var candidates []entry
+	for d := range dirChildren[""] {
+		candidates = append(candidates, entry{d, dirCount[d]})
+	}
+
+	// Greedily expand the largest candidate that still has children,
+	// until we have n candidates or all are leaves.
+	for len(candidates) < n {
+		sort.Slice(candidates, func(i, j int) bool { return candidates[i].count > candidates[j].count })
+		expanded := false
+		for i, c := range candidates {
+			children := dirChildren[c.path]
+			if len(children) == 0 {
+				continue // leaf, try next
+			}
+			// Replace c with its direct children.
+			merged := make([]entry, 0, len(candidates)-1+len(children))
+			merged = append(merged, candidates[:i]...)
+			merged = append(merged, candidates[i+1:]...)
+			for child := range children {
+				merged = append(merged, entry{child, dirCount[child]})
+			}
+			candidates = merged
+			expanded = true
+			break
+		}
+		if !expanded {
+			break // all candidates are leaf directories
+		}
+	}
+
+	sort.Slice(candidates, func(i, j int) bool { return candidates[i].count > candidates[j].count })
+	if len(candidates) > n {
+		candidates = candidates[:n]
+	}
+	result := make([]string, len(candidates))
+	fileCounts := make(map[string]int, len(candidates))
+	for i, c := range candidates {
+		result[i] = c.path
+		fileCounts[c.path] = c.count
+	}
+	return result, fileCounts, totalFiles, nil
 }
 
 // getHashes returns all commit hashes oldest-first.

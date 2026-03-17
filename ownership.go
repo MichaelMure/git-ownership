@@ -2,6 +2,8 @@
 
 package main
 
+import "strings"
+
 // Seg is a run of N consecutive lines all owned by the same author.
 type Seg struct {
 	Author string
@@ -42,8 +44,8 @@ func deleteRange(segs []Seg, pos, count int) ([]Seg, map[string]int) {
 			if cur < pos { // prefix before zone
 				out = append(out, Seg{s.Author, pos - cur})
 			}
-			dFrom := imax(cur, pos)
-			dTo := imin(hi, end)
+			dFrom := max(cur, pos)
+			dTo := min(hi, end)
 			removed[s.Author] += dTo - dFrom
 			if hi > end { // suffix after zone
 				out = append(out, Seg{s.Author, hi - end})
@@ -85,19 +87,6 @@ func insertAt(segs []Seg, pos int, author string, count int) []Seg {
 	return mergeSegs(out)
 }
 
-func imax(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
-}
-
-func imin(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
 
 // State is the full ownership picture of the repo at a point in time.
 type State struct {
@@ -181,6 +170,36 @@ func (st *State) renameFile(from, to string) {
 		st.Files[to] = segs
 		delete(st.Files, from)
 	}
+}
+
+// computeDirTotals returns per-directory author line counts for a targeted set
+// of directories. Only directories present in trackDirs are computed, so the
+// caller controls memory by passing only the directories it cares about.
+func (st *State) computeDirTotals(trackDirs map[string]bool) map[string]map[string]int {
+	result := make(map[string]map[string]int)
+	for file, segs := range st.Files {
+		// Walk every ancestor directory of this file (deepest → shallowest).
+		prefix := file
+		for {
+			i := strings.LastIndexByte(prefix, '/')
+			if i <= 0 {
+				break
+			}
+			prefix = prefix[:i]
+			if !trackDirs[prefix] {
+				continue
+			}
+			m := result[prefix]
+			if m == nil {
+				m = make(map[string]int)
+				result[prefix] = m
+			}
+			for _, seg := range segs {
+				m[seg.Author] += seg.N
+			}
+		}
+	}
+	return result
 }
 
 func (st *State) deleteFile(file string) {

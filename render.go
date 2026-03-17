@@ -24,8 +24,9 @@ type tplVars struct {
 	TotalCommits int
 	Samples      int
 	Authors      int
+	LastCommit   string
 	Generated    string
-	DataJSON     template.JS
+	FoldersJSON  template.JS
 }
 
 func renderHTML(outFile string, vars tplVars) {
@@ -40,14 +41,19 @@ func renderHTML(outFile string, vars tplVars) {
 	}
 }
 
-func buildTemplateVars(repo, branch, outFile string, total int, snaps []Snapshot, cd chartData) tplVars {
-	jsonBytes, err := json.Marshal(cd)
+func buildTemplateVars(repo, branch, outFile string, total int, snaps []Snapshot, folders []folderData) tplVars {
+	jsonBytes, err := json.Marshal(folders)
 	if err != nil {
 		log.Fatalf("json marshal: %v", err)
 	}
 	authorCount := 0
+	lastCommit := ""
 	if len(snaps) > 0 {
 		authorCount = len(snaps[len(snaps)-1].Totals)
+		// Label format is "YYYY-MM-DD hash7" — extract the short hash.
+		if lbl := snaps[len(snaps)-1].Label; len(lbl) > 11 {
+			lastCommit = lbl[11:]
+		}
 	}
 	return tplVars{
 		Repo:         repo,
@@ -56,7 +62,8 @@ func buildTemplateVars(repo, branch, outFile string, total int, snaps []Snapshot
 		TotalCommits: total,
 		Samples:      len(snaps),
 		Authors:      authorCount,
+		LastCommit:   lastCommit,
 		Generated:    time.Now().Format("2006-01-02 15:04"),
-		DataJSON:     template.JS(jsonBytes),
+		FoldersJSON:  template.JS(jsonBytes),
 	}
 }
