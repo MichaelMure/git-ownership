@@ -1,3 +1,3 @@
-module github.com/user/git-ownership
+module github.com/MichaelMure/git-ownership
 
 go 1.21

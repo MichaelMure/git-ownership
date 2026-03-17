@@ -16,8 +16,8 @@
     header { display: flex; flex-direction: column; gap: .4rem; }
     h1 { font-size: 1.25rem; font-weight: 700; color: #f8fafc; }
     h1 em { color: #60a5fa; font-style: normal; font-weight: 400; }
-    .meta { display: flex; flex-wrap: wrap; gap: 1.5rem; font-size: .8rem; color: #64748b; }
-    .meta span { color: #94a3b8; }
+    .meta { display: flex; flex-wrap: wrap; gap: 1.5rem; font-size: .8rem; color: #94a3b8; }
+    .meta span { color: #cbd5e1; }
 
     /* main layout: chart + optional side panel */
     .body-row { display: flex; gap: 1rem; flex: 1; min-height: 0; }
@@ -36,11 +36,11 @@
     .toggle-group { display: flex; background: #0f172a; border-radius: .4rem; overflow: hidden; border: 1px solid #334155; }
     .toggle-btn {
       padding: .3rem .85rem; font-size: .8rem; font-family: inherit;
-      background: transparent; color: #64748b; border: none; cursor: pointer;
+      background: transparent; color: #94a3b8; border: none; cursor: pointer;
       transition: background .15s, color .15s;
     }
     .toggle-btn.active { background: #3b82f6; color: #fff; }
-    .toggle-btn:hover:not(.active) { background: #1e3a5f; color: #94a3b8; }
+    .toggle-btn:hover:not(.active) { background: #1e3a5f; color: #e2e8f0; }
 
     /* author info panel */
     .author-panel {
@@ -53,14 +53,14 @@
     .author-panel.hidden { display: none; }
     .panel-close {
       align-self: flex-end; flex-shrink: 0;
-      background: none; border: none; color: #475569;
+      background: none; border: none; color: #64748b;
       cursor: pointer; font-size: 1.1rem; line-height: 1; padding: 0;
     }
-    .panel-close:hover { color: #cbd5e1; }
+    .panel-close:hover { color: #e2e8f0; }
     .panel-author-header { display: flex; flex-direction: column; gap: .3rem; flex-shrink: 0; }
     .panel-color-bar { height: 3px; border-radius: 2px; margin-bottom: .25rem; }
     .panel-name { font-size: 1rem; font-weight: 600; color: #f1f5f9; word-break: break-all; }
-    .panel-email { font-size: .75rem; color: #64748b; word-break: break-all; }
+    .panel-email { font-size: .75rem; color: #94a3b8; word-break: break-all; }
     .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .6rem; flex-shrink: 0; }
     .stat {
       background: #0f172a; border-radius: .5rem; padding: .6rem .7rem;
@@ -68,9 +68,9 @@
     }
     .stat.full { grid-column: 1 / -1; }
     .stat-value { font-size: .95rem; font-weight: 700; color: #f1f5f9; }
-    .stat-label { font-size: .68rem; color: #475569; text-transform: uppercase; letter-spacing: .04em; }
+    .stat-label { font-size: .68rem; color: #64748b; text-transform: uppercase; letter-spacing: .04em; }
     .sparkline-wrap { flex: 1; min-height: 0; }
-    .panel-hint { font-size: .72rem; color: #334155; text-align: center; flex-shrink: 0; }
+    .panel-hint { font-size: .72rem; color: #64748b; text-align: center; flex-shrink: 0; }
     /* others breakdown */
     .members-list {
       display: flex; flex-direction: column; gap: .3rem;
@@ -81,18 +81,19 @@
       padding: .3rem .6rem; background: #0f172a; border-radius: .4rem; font-size: .8rem;
       gap: .5rem; flex-shrink: 0;
     }
+    .member-row.highlighted { background: #1e3a5f; outline: 1px solid #3b82f6; }
     .member-name { color: #cbd5e1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .member-lines { color: #64748b; font-variant-numeric: tabular-nums; flex-shrink: 0; }
+    .member-lines { color: #94a3b8; font-variant-numeric: tabular-nums; flex-shrink: 0; }
     /* author search */
     .search-wrap { position: relative; }
     .search-input {
-      background: #0f172a; border: 1px solid #334155; border-radius: .4rem;
+      background: #0f172a; border: 1px solid #475569; border-radius: .4rem;
       color: #e2e8f0; font-size: .8rem; padding: .3rem .7rem; width: 200px;
       font-family: inherit; outline: none;
       transition: border-color .15s;
     }
     .search-input:focus { border-color: #3b82f6; }
-    .search-input::placeholder { color: #334155; }
+    .search-input::placeholder { color: #64748b; }
     .search-dropdown {
       position: absolute; top: calc(100% + 4px); right: 0; z-index: 100;
       background: #1e293b; border: 1px solid #334155; border-radius: .5rem;
@@ -106,7 +107,7 @@
     }
     .search-result:hover { background: #334155; }
     .search-result-name { color: #e2e8f0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .search-result-meta { color: #64748b; font-size: .72rem; flex-shrink: 0; }
+    .search-result-meta { color: #94a3b8; font-size: .72rem; flex-shrink: 0; }
   </style>
 </head>
 <body>
@@ -126,8 +127,8 @@
     <div class="card">
       <div class="card-toolbar">
         <div class="toggle-group">
-          <button class="toggle-btn active" id="btn-pct" onclick="setMode('pct')">% Share</button>
-          <button class="toggle-btn"        id="btn-abs" onclick="setMode('abs')">Line Count</button>
+          <button class="toggle-btn active" id="btn-abs" onclick="setMode('abs')">Line Count</button>
+          <button class="toggle-btn"        id="btn-pct" onclick="setMode('pct')">% Share</button>
         </div>
         <div class="toggle-group">
           <button class="toggle-btn active" id="btn-x-commits" onclick="setXMode('commits')">Commits</button>
@@ -158,7 +159,7 @@
 
   <script>
     const DATA = {{.DataJSON}};
-    let mode  = 'pct';
+    let mode  = 'abs';
     let xMode = 'commits'; // 'commits' (even spacing) | 'time' (linear calendar)
     let sparkChart = null;
     let hoveredDatasetIdx = -1;
@@ -170,10 +171,21 @@
     // Topological order (commit order) ≠ chronological order: feature-branch
     // commits often carry timestamps earlier than the merge commit they landed in.
     // Plotting them unsorted causes lines to jump backwards in time mode.
-    const timeOrder = timestamps
-      .map((t, i) => ({ t, i }))
-      .sort((a, b) => a.t - b.t)
-      .map(o => o.i);
+    //
+    // Also deduplicate same-day timestamps: multiple commits on the same day share
+    // the same ms value (date-only precision), causing duplicate x positions in the
+    // linear-scale chart. Duplicate x points produce vertical fill artifacts.
+    // Keep the highest original index per day — the latest topological snapshot.
+    const timeOrder = (() => {
+      const sorted = timestamps
+        .map((t, i) => ({ t, i }))
+        .sort((a, b) => a.t - b.t || a.i - b.i); // stable: tie-break by index
+      const dayMap = new Map(); // timestamp -> last original index seen
+      for (const { t, i } of sorted) dayMap.set(t, i);
+      return [...dayMap.entries()]
+        .sort((a, b) => a[0] - b[0])
+        .map(([, i]) => i);
+    })();
 
     // ── helpers ────────────────────────────────────────────────────────────────
     function fmtLines(n) {
@@ -213,18 +225,26 @@
         .sort((a, b) => b.lines - a.lines)
         .slice(0, 12);
       if (!hits.length) { dd.classList.add('hidden'); return; }
-      dd.innerHTML = hits.map(r =>
-        '<div class="search-result" onclick="pickSearch(' + r.dsIdx + ')">' +
+      dd.innerHTML = hits.map((r, i) =>
+        '<div class="search-result" data-hit="' + i + '">' +
         '<span class="search-result-name">' + r.name + '</span>' +
         '<span class="search-result-meta">' + fmtLines(r.lines) +
           (r.inOthers ? ' · Others' : '') + '</span>' +
         '</div>'
       ).join('');
+      dd.querySelectorAll('.search-result').forEach((el, i) => {
+        el.addEventListener('click', () => pickSearch(hits[i]));
+      });
       dd.classList.remove('hidden');
     }
 
-    function pickSearch(dsIdx) {
-      showPanel(dsIdx);
+    function pickSearch(hit) {
+      if (hit.inOthers) {
+        const ds = DATA.datasets[hit.dsIdx];
+        const m  = ds.members.find(m => m.name === hit.name);
+        if (m) { showMemberPanel(m); return; }
+      }
+      showPanel(hit.dsIdx);
       document.getElementById('author-search').value = '';
       document.getElementById('search-dropdown').classList.add('hidden');
     }
@@ -235,53 +255,39 @@
     });
 
     // ── build Chart.js datasets from DATA ─────────────────────────────────────
+    // Both modes pre-compute cumulative sums and use fill:'-1' so each band's
+    // fill covers only its own region (no overlap). This keeps colors identical
+    // between commit and time modes (overlapping fills would wash colours out).
     function makeChartDatasets() {
-      if (xMode === 'time') {
-        // Chart.js's built-in stacking (scales.y.stacked) doesn't work correctly
-        // with type:'linear' + {x,y} point data — the accumulation is unreliable
-        // and the total drifts from 100%.  Instead we pre-compute the cumulative
-        // sum ourselves and render with fill:'-1' so Chart.js just draws shapes.
-        // rawData stores the original per-author values for tooltip display.
-        const n = timeOrder.length;
-        const cumulative = new Float64Array(n); // running sum per sorted position
-        return DATA.datasets.map((ds, dsIdx) => {
-          const vals = currentData(ds);
-          const rawData = timeOrder.map(i => vals[i]);
-          const data = rawData.map((v, j) => {
-            cumulative[j] += v;
-            return { x: timestamps[timeOrder[j]], y: cumulative[j] };
-          });
-          return {
-            label:           ds.label,
-            data,
-            rawData,          // side-channel: incremental values for tooltip
-            fill:            dsIdx === 0 ? 'origin' : '-1',
-            backgroundColor: ds.backgroundColor,
-            borderColor:     ds.borderColor,
-            borderWidth:     ds.borderWidth,
-            tension:         0, // straight lines preserve the stacked sum exactly
-          };
+      const order   = xMode === 'time' ? timeOrder : DATA.datasets[0].absData.map((_, i) => i);
+      const n       = order.length;
+      const cumulative = new Float64Array(n);
+      return DATA.datasets.map((ds, dsIdx) => {
+        const vals   = currentData(ds);
+        const rawData = order.map(i => vals[i]);
+        const data    = rawData.map((v, j) => {
+          cumulative[j] += v;
+          return xMode === 'time'
+            ? { x: timestamps[order[j]], y: cumulative[j] }
+            : cumulative[j];
         });
-      }
-
-      // commits mode — let Chart.js handle stacking via scales.y.stacked
-      return DATA.datasets.map(ds => ({
-        label:           ds.label,
-        data:            currentData(ds),
-        fill:            ds.fill,
-        backgroundColor: ds.backgroundColor,
-        borderColor:     ds.borderColor,
-        borderWidth:     ds.borderWidth,
-        tension:         ds.tension,
-      }));
+        return {
+          label:           ds.label,
+          data,
+          rawData,
+          fill:            'origin',
+          backgroundColor: ds.backgroundColor,
+          borderColor:     ds.borderColor,
+          borderWidth:     ds.borderWidth,
+          tension:         ds.tension,
+        };
+      });
     }
 
     // Return the display value (non-cumulative) for a dataset at a point index.
     function displayValue(dsIdx, pointIdx) {
       const ds = chart.data.datasets[dsIdx];
-      return xMode === 'time'
-        ? (ds.rawData ? ds.rawData[pointIdx] : 0)
-        : (ds.data[pointIdx] || 0);
+      return ds.rawData ? ds.rawData[pointIdx] : 0;
     }
 
     // ── custom tooltip positioner: follows cursor on the side, never below ────
@@ -333,31 +339,19 @@
           const xIdx = xEls[0].index;
           const yScale = chart.scales.y;
           const datasets = chart.data.datasets;
-          let cumulative = 0;
           hoveredDatasetIdx = -1;
-          if (xMode === 'time') {
-            // Data is pre-stacked: dataset[i].data[xIdx].y is the cumulative top
-            // of band i. Walk bands from bottom (0) upward.
-            let prevPixel = yScale.getPixelForValue(0);
-            for (let i = 0; i < datasets.length; i++) {
-              const pt = datasets[i].data[xIdx];
-              const cumY = pt ? pt.y : 0;
-              const topPixel = yScale.getPixelForValue(cumY);
-              if (pos.y >= topPixel && pos.y <= prevPixel) {
-                hoveredDatasetIdx = i; break;
-              }
-              prevPixel = topPixel;
+          // Data is pre-stacked in both modes: dataset[i].data[xIdx] is the
+          // cumulative top of band i (a {x,y} object in time mode, a number in
+          // commits mode). Walk bands from bottom (0) upward.
+          let prevPixel = yScale.getPixelForValue(0);
+          for (let i = 0; i < datasets.length; i++) {
+            const pt   = datasets[i].data[xIdx];
+            const cumY = pt != null ? (typeof pt === 'object' ? pt.y : pt) : 0;
+            const topPixel = yScale.getPixelForValue(cumY);
+            if (pos.y >= topPixel && pos.y <= prevPixel) {
+              hoveredDatasetIdx = i; break;
             }
-          } else {
-            for (let i = 0; i < datasets.length; i++) {
-              const val = datasets[i].data[xIdx] || 0;
-              const pixelBottom = yScale.getPixelForValue(cumulative);
-              cumulative += val;
-              const pixelTop = yScale.getPixelForValue(cumulative);
-              if (pos.y >= pixelTop && pos.y <= pixelBottom) {
-                hoveredDatasetIdx = i; break;
-              }
-            }
+            prevPixel = topPixel;
           }
         },
         onClick() {
@@ -367,7 +361,7 @@
           x: xMode === 'time' ? {
             type: 'linear',
             ticks: {
-              color: '#475569', maxTicksLimit: 20, maxRotation: 45, font: { size: 10 },
+              color: '#94a3b8', maxTicksLimit: 20, maxRotation: 45, font: { size: 10 },
               // Format millisecond tick values as YYYY-MM
               callback: v => {
                 const d = new Date(v);
@@ -376,16 +370,14 @@
             },
             grid: { color: '#1e293b' },
           } : {
-            stacked: true,
-            ticks: { color: '#475569', maxTicksLimit: 20, maxRotation: 45, font: { size: 10 } },
+            ticks: { color: '#94a3b8', maxTicksLimit: 20, maxRotation: 45, font: { size: 10 } },
             grid: { color: '#1e293b' },
           },
           y: {
-            stacked: xMode !== 'time', // time mode uses pre-stacked cumulative values
             min: 0,
             max: isPct ? 100 : undefined,
             ticks: {
-              color: '#475569',
+              color: '#94a3b8',
               font: { size: 11 },
               callback: isPct ? (v => v + '%') : (v => fmtLines(v)),
             },
@@ -399,7 +391,7 @@
           // in dataset N-1 forces Chart.js to interpolate the fill boundary,
           // producing a mismatch (visual "hiccup"). Safe to skip: the data is
           // already capped at --max-points so there's rarely much to decimate.
-          decimation: { enabled: xMode !== 'time', algorithm: 'lttb', samples: 600 },
+          decimation: { enabled: false },
           tooltip: {
             position: 'cursor',
             backgroundColor: '#0f172a',
@@ -430,7 +422,7 @@
           },
           legend: {
             position: 'bottom',
-            labels: { color: '#94a3b8', padding: 16, boxWidth: 12, font: { size: 11 } },
+            labels: { color: '#cbd5e1', padding: 16, boxWidth: 12, font: { size: 11 } },
             onClick(evt, item) { showPanel(item.datasetIndex); },
           },
         },
@@ -459,7 +451,67 @@
     }
 
     // ── author panel ───────────────────────────────────────────────────────────
-    function showPanel(idx) {
+    function showMemberPanel(m) {
+      const last       = m.absData.length - 1;
+      const finalLines = m.absData[last];
+      const totalNow   = DATA.datasets.reduce((s, d) => s + (d.absData[last] || 0), 0);
+      const finalPct   = totalNow > 0 ? finalLines / totalNow * 100 : 0;
+      let peak = 0, peakIdx = 0, firstIdx = -1;
+      for (let i = 0; i <= last; i++) {
+        if (m.absData[i] > peak) { peak = m.absData[i]; peakIdx = i; }
+        if (firstIdx < 0 && m.absData[i] > 0) firstIdx = i;
+      }
+      let totalAtPeak = 0;
+      DATA.datasets.forEach(d => totalAtPeak += d.absData[peakIdx] || 0);
+      const peakPct   = totalAtPeak > 0 ? peak / totalAtPeak * 100 : 0;
+      const firstDate = firstIdx >= 0 ? DATA.labels[firstIdx].split(' ')[0] : '—';
+      const lastDate  = DATA.labels[last].split(' ')[0];
+
+      document.getElementById('panel-color-bar').style.background = '#94a3b8';
+      document.getElementById('panel-name').textContent  = m.name;
+      document.getElementById('panel-email').textContent = m.email;
+      document.getElementById('panel-stats').innerHTML =
+        stat(fmtLines(finalLines), 'current lines') +
+        stat(fmtPct(finalPct),     'current share') +
+        stat(fmtLines(peak),       'peak lines') +
+        stat(fmtPct(peakPct),      'peak share') +
+        stat(firstDate,            'first commit', true) +
+        stat(lastDate,             'last commit',  true);
+
+      document.getElementById('panel-sparkline-wrap').style.display = '';
+      document.getElementById('panel-members-wrap').style.display   = 'none';
+      document.getElementById('panel-hint').textContent = 'own line count over time · Others';
+
+      if (sparkChart) { sparkChart.destroy(); sparkChart = null; }
+      const data = mode === 'pct' ? m.pctData : m.absData;
+      const isPct = mode === 'pct';
+      sparkChart = new Chart(document.getElementById('sparkline'), {
+        type: 'line',
+        data: {
+          labels: DATA.labels,
+          datasets: [{ data, fill: true, backgroundColor: 'rgba(148,163,184,0.3)',
+            borderColor: '#94a3b8', borderWidth: 1.5, pointRadius: 0, tension: 0.3 }],
+        },
+        options: {
+          animation: false, responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { display: false }, tooltip: {
+            callbacks: { label: ctx => isPct ? fmtPct(ctx.parsed.y) : fmtLines(ctx.parsed.y) },
+          }},
+          scales: {
+            x: { display: false },
+            y: { display: false, min: 0 },
+          },
+        },
+      });
+
+      const panel = document.getElementById('author-panel');
+      panel.dataset.authorIdx = '';
+      panel.classList.remove('hidden');
+      document.getElementById('author-search').value = '';
+      document.getElementById('search-dropdown').classList.add('hidden');
+    }
+
+    function showPanel(idx, highlightMember) {
       const ds   = DATA.datasets[idx];
       const abs  = ds.absData;
       const last = abs.length - 1;
@@ -500,11 +552,15 @@
         membersWrap.style.display = 'flex';
         hint.textContent = 'sorted by current line count';
         membersWrap.innerHTML = ds.members.map(m =>
-          '<div class="member-row">' +
+          '<div class="member-row' + (highlightMember === m.name ? ' highlighted' : '') + '">' +
           '<span class="member-name" title="' + m.email + '">' + m.name + '</span>' +
           '<span class="member-lines">' + fmtLines(m.finalLines) + '</span>' +
           '</div>'
         ).join('');
+        if (highlightMember) {
+          const row = membersWrap.querySelector('.highlighted');
+          if (row) row.scrollIntoView({ block: 'nearest' });
+        }
         if (sparkChart) { sparkChart.destroy(); sparkChart = null; }
       } else {
         sparkWrap.style.display   = '';
@@ -553,7 +609,7 @@
             x: { display: false, stacked: false },
             y: {
               display: true, stacked: false, min: 0,
-              ticks: { color: '#334155', font: { size: 9 },
+              ticks: { color: '#64748b', font: { size: 9 },
                        callback: isPct ? (v => v.toFixed(0)+'%') : (v => fmtLines(v)),
                        maxTicksLimit: 4 },
               grid: { color: '#1a2744' },

@@ -16,9 +16,11 @@ type Snapshot struct {
 
 // member is one author inside the "Others" group.
 type member struct {
-	Name       string `json:"name"`
-	Email      string `json:"email"`
-	FinalLines int    `json:"finalLines"`
+	Name       string    `json:"name"`
+	Email      string    `json:"email"`
+	FinalLines int       `json:"finalLines"`
+	AbsData    []float64 `json:"absData"`
+	PctData    []float64 `json:"pctData"`
 }
 
 // chartDataset carries both the % and absolute line-count series for one author,
@@ -174,10 +176,20 @@ func buildChart(snaps []Snapshot, emailToName map[string]string, minPct float64)
 		last := snaps[len(snaps)-1]
 		members := make([]member, 0, len(minor))
 		for _, g := range minor {
+			mAbs := make([]float64, len(snaps))
+			mPct := make([]float64, len(snaps))
+			for j, s := range snaps {
+				mAbs[j] = float64(sumSnap(s, g.emails))
+				if s.Total > 0 {
+					mPct[j] = mAbs[j] / float64(s.Total) * 100
+				}
+			}
 			members = append(members, member{
 				Name:       g.name,
 				Email:      strings.Join(g.emails, ", "),
 				FinalLines: sumSnap(last, g.emails),
+				AbsData:    mAbs,
+				PctData:    mPct,
 			})
 		}
 		sort.Slice(members, func(i, j int) bool { return members[i].FinalLines > members[j].FinalLines })

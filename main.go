@@ -128,7 +128,7 @@ Examples:
 
 	// 4. Build chart data and render HTML.
 	cd := buildChart(snaps, emailToName, *minPctFlag)
-	vars := buildTemplateVars(absRepo, *branchFlag, outFile, total, snaps, cd)
+	vars := buildTemplateVars(filepath.Base(absRepo), *branchFlag, outFile, total, snaps, cd)
 	renderHTML(outFile, vars)
 
 	fmt.Printf("Output     : %s\n", outFile)
