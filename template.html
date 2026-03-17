@@ -242,7 +242,10 @@
       const n   = Math.min(currentBands, all.length);
       const major = all.slice(0, n);
       const minor = all.slice(n);
-      if (minor.length === 0) return major;
+
+      // Compute how many lines/pct belong to authors excluded from the data
+      // entirely (beyond --max-graph). These must be added to Others so that
+      // the % share view always sums to 100%.
       const len = all[0].absData.length;
       const othersAbs = new Array(len).fill(0);
       const othersPct = new Array(len).fill(0);
@@ -252,8 +255,29 @@
           othersPct[i] += ds.pctData[i] || 0;
         }
       }
+      // Add the excluded-author remainder using the stored per-snapshot totals.
+      if (DATA.totalAbs) {
+        for (let i = 0; i < len; i++) {
+          const includedAbs = all.reduce((s, ds) => s + (ds.absData[i] || 0), 0);
+          const excluded = (DATA.totalAbs[i] || 0) - includedAbs;
+          if (excluded > 0) {
+            othersAbs[i] += excluded;
+            othersPct[i] += DATA.totalAbs[i] > 0 ? excluded / DATA.totalAbs[i] * 100 : 0;
+          }
+        }
+      }
+
+      const hasOthers = othersAbs.some(v => v > 0);
+      if (!hasOthers) return major;
+
+      const hasExcluded = DATA.totalAbs && DATA.totalAbs.some(
+        (t, i) => t > all.reduce((s, ds) => s + (ds.absData[i] || 0), 0)
+      );
+      const othersLabel = minor.length > 0
+        ? 'Others (' + minor.length + (hasExcluded ? '+' : '') + ' authors)'
+        : 'Others';
       return [...major, {
-        label:           'Others (' + minor.length + ' authors)',
+        label:           othersLabel,
         email:           '',
         absData:         othersAbs,
         pctData:         othersPct,
@@ -270,21 +294,28 @@
     // Unix-ms timestamp for each snapshot, parsed from the "YYYY-MM-DD hash" label.
     const timestamps = DATA.labels.map(l => new Date(l.slice(0, 10)).getTime());
 
-    // Indices sorted by timestamp ascending.
-    // Topological order (commit order) ≠ chronological order: feature-branch
-    // commits often carry timestamps earlier than the merge commit they landed in.
-    // Plotting them unsorted causes lines to jump backwards in time mode.
+    // Indices for time mode: one entry per unique snapshot day, mapped to the
+    // highest topological index seen UP TO that day (running maximum).
     //
-    // Also deduplicate same-day timestamps: multiple commits on the same day share
-    // the same ms value (date-only precision), causing duplicate x positions in the
-    // linear-scale chart. Duplicate x points produce vertical fill artifacts.
-    // Keep the highest original index per day — the latest topological snapshot.
+    // Why: topological order ≠ chronological order. Feature-branch commits
+    // carry timestamps from when they were written (e.g. 2019) but are applied
+    // late in topological history (high index). Picking "the snapshot for that
+    // day" naively can go backward in state (a later date shows an earlier repo
+    // state), causing the ugly vertical jump.
+    //
+    // Using the running max guarantees the displayed state never goes backward:
+    // each day shows the most advanced snapshot seen so far. Days with no new
+    // snapshots are simply absent from the map (chart shows the previous state).
     const timeOrder = (() => {
-      const sorted = timestamps
+      const pairs = timestamps
         .map((t, i) => ({ t, i }))
-        .sort((a, b) => a.t - b.t || a.i - b.i); // stable: tie-break by index
-      const dayMap = new Map(); // timestamp -> last original index seen
-      for (const { t, i } of sorted) dayMap.set(t, i);
+        .sort((a, b) => a.t - b.t || a.i - b.i);
+      let maxIdx = -1;
+      const dayMap = new Map();
+      for (const { t, i } of pairs) {
+        if (i > maxIdx) maxIdx = i;
+        dayMap.set(t, maxIdx);
+      }
       return [...dayMap.entries()]
         .sort((a, b) => a[0] - b[0])
         .map(([, i]) => i);

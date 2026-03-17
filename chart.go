@@ -91,6 +91,7 @@ type chartDataset struct {
 type chartData struct {
 	Labels   []string       `json:"labels"`
 	Datasets []chartDataset `json:"datasets"`
+	TotalAbs []float64      `json:"totalAbs"` // total lines across ALL authors per snapshot (incl. excluded)
 }
 
 var palette = []string{
@@ -217,5 +218,9 @@ func buildChart(snaps []Snapshot, emailToName map[string]string, maxBands int, g
 		})
 	}
 
-	return chartData{Labels: labels, Datasets: ds}
+	totalAbs := make([]float64, len(snaps))
+	for j, s := range snaps {
+		totalAbs[j] = float64(s.Total)
+	}
+	return chartData{Labels: labels, Datasets: ds, TotalAbs: totalAbs}
 }
