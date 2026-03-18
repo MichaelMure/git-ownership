@@ -72,8 +72,19 @@ func selectFolders(repo, branch string, n int) ([]string, map[string]int, int, e
 		if file == "" {
 			continue
 		}
-		totalFiles++
 		parts := strings.Split(file, "/")
+		// Skip files inside hidden directories (any component starting with ".").
+		hidden := false
+		for _, p := range parts[:len(parts)-1] {
+			if strings.HasPrefix(p, ".") {
+				hidden = true
+				break
+			}
+		}
+		if hidden {
+			continue
+		}
+		totalFiles++
 		for depth := 1; depth < len(parts); depth++ {
 			dir    := strings.Join(parts[:depth], "/")
 			parent := ""
@@ -99,10 +110,21 @@ func selectFolders(repo, branch string, n int) ([]string, map[string]int, int, e
 		candidates = append(candidates, entry{d, dirCount[d]})
 	}
 
-	// Greedily expand the largest candidate that still has children,
-	// until we have n candidates or all are leaves.
-	for len(candidates) < n {
+	// Greedily expand the largest candidate that still has children.
+	// Stopping condition when we already have n candidates: stop unless the
+	// largest is more than 3× the second-largest (lopsided distribution).
+	// This expands extreme outliers while leaving balanced sets alone — e.g.
+	// t/(2458) vs Documentation/(974) is only 2.5× so it stays unexpanded,
+	// but t/(10000) vs everything-else/(100) is 100× so t/ gets drilled into.
+	const lopsidedFactor = 3
+	for {
 		sort.Slice(candidates, func(i, j int) bool { return candidates[i].count > candidates[j].count })
+		if len(candidates) >= n {
+			// Stop unless the distribution is lopsided.
+			if len(candidates) < 2 || candidates[0].count <= candidates[1].count*lopsidedFactor {
+				break
+			}
+		}
 		expanded := false
 		for i, c := range candidates {
 			children := dirChildren[c.path]
