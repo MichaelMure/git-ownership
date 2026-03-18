@@ -88,10 +88,23 @@ type chartDataset struct {
 	Tension         float64   `json:"tension"`
 }
 
+// member is an author excluded from the chart datasets (beyond --max-graph)
+// but included in the search index with their stats (no time-series).
+type member struct {
+	Name       string `json:"name"`
+	Email      string `json:"email"`
+	FinalLines int    `json:"finalLines"`
+	PeakLines  int    `json:"peakLines"`
+	PeakTotal  int    `json:"peakTotal"`  // total repo lines at peak snapshot (for peak share)
+	FirstDate  string `json:"firstDate"`
+	LastDate   string `json:"lastDate"`
+}
+
 type chartData struct {
 	Labels   []string       `json:"labels"`
 	Datasets []chartDataset `json:"datasets"`
 	TotalAbs []float64      `json:"totalAbs"` // total lines across ALL authors per snapshot (incl. excluded)
+	Members  []member       `json:"members,omitempty"` // excluded authors: searchable but no time-series
 }
 
 var palette = []string{
@@ -182,8 +195,10 @@ func buildChart(snaps []Snapshot, emailToName map[string]string, maxBands int, g
 		labels[i] = s.Label
 	}
 
-	// Cap to maxBands if specified; JS will handle the Others grouping dynamically.
+	// Cap to maxBands. Keep excluded groups to build the searchable members list.
+	var excludedGroups []*group
 	if maxBands > 0 && len(groups) > maxBands {
+		excludedGroups = groups[maxBands:]
 		groups = groups[:maxBands]
 	}
 
@@ -222,5 +237,44 @@ func buildChart(snaps []Snapshot, emailToName map[string]string, maxBands int, g
 	for j, s := range snaps {
 		totalAbs[j] = float64(s.Total)
 	}
-	return chartData{Labels: labels, Datasets: ds, TotalAbs: totalAbs}
+
+	// Build the searchable members list from excluded groups.
+	var members []member
+	for _, g := range excludedGroups {
+		var peak, peakTotal, finalLines int
+		var prevV int
+		var firstDate, lastDate string
+		for j, s := range snaps {
+			v := sumSnap(s, g.emails)
+			if v > 0 && firstDate == "" {
+				firstDate = s.Label[:10]
+			}
+			if v > prevV {
+				lastDate = s.Label[:10]
+			}
+			if v > peak {
+				peak = v
+				peakTotal = s.Total
+			}
+			if j == len(snaps)-1 {
+				finalLines = v
+			}
+			prevV = v
+		}
+		if peak == 0 {
+			continue // author has no lines in this folder
+		}
+		members = append(members, member{
+			Name:       g.name,
+			Email:      strings.Join(g.emails, ", "),
+			FinalLines: finalLines,
+			PeakLines:  peak,
+			PeakTotal:  peakTotal,
+			FirstDate:  firstDate,
+			LastDate:   lastDate,
+		})
+	}
+	// Already sorted by global rank; stable for search display.
+
+	return chartData{Labels: labels, Datasets: ds, TotalAbs: totalAbs, Members: members}
 }

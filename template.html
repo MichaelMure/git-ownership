@@ -335,13 +335,20 @@
     }
 
     // ── search index ──────────────────────────────────────────────────────────
-    // All included authors as individual entries (no Others nesting).
+    // Covers both chart datasets (full panel) and excluded members (stats only).
     function buildSearchIdx() {
-      return DATA.datasets.map((ds, rawIdx) => ({
+      const idx = DATA.datasets.map((ds, rawIdx) => ({
         name: ds.label, email: ds.email,
         lines: ds.absData[ds.absData.length - 1],
-        rawIdx,
+        rawIdx, member: null,
       }));
+      if (DATA.members) {
+        DATA.members.forEach(m => idx.push({
+          name: m.name, email: m.email, lines: m.finalLines,
+          rawIdx: -1, member: m,
+        }));
+      }
+      return idx;
     }
     let searchIdx = buildSearchIdx();
 
@@ -354,13 +361,14 @@
         .sort((a, b) => b.lines - a.lines)
         .slice(0, 12);
       if (!hits.length) { dd.classList.add('hidden'); return; }
-      dd.innerHTML = hits.map((r, i) =>
-        '<div class="search-result" data-hit="' + i + '">' +
-        '<span class="search-result-name">' + r.name + '</span>' +
-        '<span class="search-result-meta">' + fmtLines(r.lines) +
-          (r.rawIdx >= currentBands ? ' · Others' : '') + '</span>' +
-        '</div>'
-      ).join('');
+      dd.innerHTML = hits.map((r, i) => {
+        const tag = (!r.member && r.rawIdx >= currentBands) ? ' · Others' : '';
+        const dim = r.member ? ' style="opacity:0.5"' : '';
+        return '<div class="search-result" data-hit="' + i + '"' + dim + '>' +
+          '<span class="search-result-name">' + r.name + '</span>' +
+          '<span class="search-result-meta">' + fmtLines(r.lines) + tag + '</span>' +
+          '</div>';
+      }).join('');
       dd.querySelectorAll('.search-result').forEach((el, i) => {
         el.addEventListener('click', () => pickSearch(hits[i]));
       });
@@ -368,7 +376,8 @@
     }
 
     function pickSearch(hit) {
-      showRawPanel(hit.rawIdx);
+      if (hit.member) showMemberPanel(hit.member);
+      else showRawPanel(hit.rawIdx);
       document.getElementById('author-search').value = '';
       document.getElementById('search-dropdown').classList.add('hidden');
     }
@@ -708,6 +717,34 @@
 
     // ── author panel ───────────────────────────────────────────────────────────
 
+    // showMemberPanel: for excluded authors (beyond --max-graph) — stats only, no sparkline.
+    function showMemberPanel(m) {
+      const last     = DATA.totalAbs ? DATA.totalAbs.length - 1 : DATA.datasets[0].absData.length - 1;
+      const totalNow = DATA.totalAbs ? DATA.totalAbs[last] :
+        DATA.datasets.reduce((s, d) => s + (d.absData[last] || 0), 0);
+      const finalPct = totalNow > 0 ? m.finalLines / totalNow * 100 : 0;
+      const peakPct  = m.peakTotal > 0 ? m.peakLines / m.peakTotal * 100 : 0;
+
+      document.getElementById('panel-color-bar').style.background = '#64748b';
+      document.getElementById('panel-name').textContent  = m.name;
+      document.getElementById('panel-email').textContent = m.email;
+      document.getElementById('panel-stats').innerHTML =
+        stat(fmtLines(m.finalLines), 'current lines') +
+        stat(fmtPct(finalPct),       'current share') +
+        stat(fmtLines(m.peakLines),  'peak lines') +
+        stat(fmtPct(peakPct),        'peak share') +
+        stat(m.firstDate || '—',     'first commit', true) +
+        stat(m.lastDate  || '—',     'last commit',  true);
+      document.getElementById('panel-sparkline-wrap').style.display = 'none';
+      document.getElementById('panel-members-wrap').style.display   = 'none';
+      document.getElementById('panel-hint').textContent = 'not graphed — increase --max-graph to show';
+      if (sparkChart) { sparkChart.destroy(); sparkChart = null; }
+
+      const panel = document.getElementById('author-panel');
+      panel.dataset.authorIdx = '';
+      panel.classList.remove('hidden');
+    }
+
     // showPanel: display index into displayDatasets() — used by chart click / legend.
     function showPanel(displayIdx, highlightMember) {
       const dd = displayDatasets();
@@ -735,17 +772,24 @@
         if (sparkChart) { sparkChart.destroy(); sparkChart = null; }
 
         const minor = DATA.datasets.slice(ds.minorStart)
-          .map((m, i) => ({ m, rawIdx: ds.minorStart + i, lines: m.absData[last] }))
+          .map((m, i) => ({ name: m.label, email: m.email, rawIdx: ds.minorStart + i, lines: m.absData[last], excluded: false }))
+          .concat((DATA.members || []).map(m => ({ name: m.name, email: m.email, rawIdx: -1, lines: m.finalLines, excluded: true, member: m })))
           .sort((a, b) => b.lines - a.lines);
-        membersWrap.innerHTML = minor.map(({ m, rawIdx, lines }) =>
-          '<div class="member-row' + (highlightMember === m.label ? ' highlighted' : '') +
-          '" data-raw-idx="' + rawIdx + '">' +
-          '<span class="member-name" title="' + m.email + '">' + m.label + '</span>' +
-          '<span class="member-lines">' + fmtLines(lines) + '</span>' +
-          '</div>'
-        ).join('');
-        membersWrap.querySelectorAll('.member-row').forEach(el => {
+        membersWrap.innerHTML = minor.map(({ name, email, rawIdx, lines, excluded }, rowIdx) => {
+          const hi  = !excluded && highlightMember === name ? ' highlighted' : '';
+          const dim = excluded ? ' style="opacity:0.5"' : '';
+          const dataAttr = excluded ? ' data-member-row="' + rowIdx + '"' : ' data-raw-idx="' + rawIdx + '"';
+          return '<div class="member-row' + hi + '"' + dim + dataAttr + '>' +
+            '<span class="member-name" title="' + email + '">' + name + '</span>' +
+            '<span class="member-lines">' + fmtLines(lines) + '</span>' +
+            '</div>';
+        }).join('');
+        membersWrap.querySelectorAll('.member-row[data-raw-idx]').forEach(el => {
           el.addEventListener('click', () => showRawPanel(+el.dataset.rawIdx));
+        });
+        membersWrap.querySelectorAll('.member-row[data-member-row]').forEach(el => {
+          const row = minor[+el.dataset.memberRow];
+          el.addEventListener('click', () => showMemberPanel(row.member));
         });
         if (highlightMember) {
           const row = membersWrap.querySelector('.highlighted');
