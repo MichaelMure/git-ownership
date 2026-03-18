@@ -17,9 +17,6 @@ archives:
     formats: [binary]
     name_template: "{{ .ProjectName }}-{{ .Version }}-{{ .Os }}-{{ .Arch }}"
 
-sboms:
-  - artifacts: archive
-
 checksum:
   name_template: "checksums.txt"
 
