@@ -66,16 +66,23 @@ git-ownership /path/to/repo
 
 This writes `<reponame>.html` in the current directory. Open it in a browser.
 
+To exclude vendor or generated directories from ownership tracking:
+
+```
+git-ownership --exclude-regex '^vendor/' /path/to/repo
+```
+
 ### Flags
 
-| Flag           | Default           | Description                                                                  |
-|----------------|-------------------|------------------------------------------------------------------------------|
-| `--branch`     | `HEAD`            | Branch/ref to analyse                                                        |
-| `--output`     | `<reponame>.html` | Output file path                                                             |
-| `--max-points` | `1000`            | Max chart data points — commits are strided to fit (0 = record every commit) |
-| `--max-graph`  | `50`              | Max authors included as individual chart datasets (0 = all)                  |
-| `--folder`     | `10`              | Number of sub-folders to break down (0 = whole repo only)                    |
-| `--workers`    | num CPUs          | Parallel `git log` workers                                                   |
+| Flag               | Default           | Description                                                                  |
+|--------------------|-------------------|------------------------------------------------------------------------------|
+| `--branch`         | `HEAD`            | Branch/ref to analyse                                                        |
+| `--output`         | `<reponame>.html` | Output file path                                                             |
+| `--max-points`     | `1000`            | Max chart data points — commits are strided to fit (0 = record every commit) |
+| `--max-graph`      | `50`              | Max authors included as individual chart datasets (0 = all)                  |
+| `--folder`         | `10`              | Number of sub-folders to break down (0 = whole repo only)                    |
+| `--workers`        | num CPUs          | Parallel `git log` workers                                                   |
+| `--exclude-regex`  | _(none)_          | Exclude file paths matching this regex (e.g. `^vendor/`)                     |
 
 ## Output
 
