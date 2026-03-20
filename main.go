@@ -17,6 +17,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"sort"
 	"strings"
@@ -34,6 +35,8 @@ func main() {
 		"number of largest folders to break down (searched at any depth); 0 = whole project only")
 	workersFlag := flag.Int("workers", runtime.NumCPU(),
 		"parallel git log workers (default: number of CPUs)")
+	excludeRegexFlag := flag.String("exclude-regex", "",
+		"exclude file paths matching this regex (e.g. ^vendor/)")
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: git-ownership [flags] <repo-path>\n\nFlags:\n")
 		flag.PrintDefaults()
@@ -42,12 +45,22 @@ Examples:
   git-ownership .
   git-ownership --branch main /path/to/repo
   git-ownership --output graph.html --max-points 0 .
+  git-ownership --exclude-regex '^vendor/' /path/to/repo
 `)
 	}
 	flag.Parse()
 	repo := "."
 	if flag.NArg() > 0 {
 		repo = flag.Arg(0)
+	}
+
+	var excludeRe *regexp.Regexp
+	if *excludeRegexFlag != "" {
+		var reErr error
+		excludeRe, reErr = regexp.Compile(*excludeRegexFlag)
+		if reErr != nil {
+			log.Fatalf("invalid --exclude-regex: %v", reErr)
+		}
 	}
 
 	absRepo, err := filepath.Abs(repo)
@@ -74,7 +87,7 @@ Examples:
 	if *folderFlag > 0 {
 		fmt.Print("Folders    : scanning… ")
 		var dirErr error
-		selectedDirs, selectedFileCounts, totalFiles, dirErr = selectFolders(absRepo, *branchFlag, *folderFlag)
+		selectedDirs, selectedFileCounts, totalFiles, dirErr = selectFolders(absRepo, *branchFlag, *folderFlag, excludeRe)
 		if dirErr != nil {
 			fmt.Printf("\rFolders    : (skipped: %v)\n", dirErr)
 			selectedDirs = nil
@@ -199,7 +212,7 @@ Examples:
 	start := time.Now()
 	i := 0
 
-	if err := streamLog(absRepo, *branchFlag, *workersFlag, state, func(c CommitMeta) error {
+	if err := streamLog(absRepo, *branchFlag, *workersFlag, state, excludeRe, func(c CommitMeta) error {
 		if c.AuthorName != "" {
 			emailToName[c.AuthorEmail] = c.AuthorName
 		}
