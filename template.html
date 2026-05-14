@@ -724,7 +724,7 @@
       const totalNow = DATA.totalAbs ? DATA.totalAbs[last] :
         DATA.datasets.reduce((s, d) => s + (d.absData[last] || 0), 0);
       const finalPct = totalNow > 0 ? m.finalLines / totalNow * 100 : 0;
-      const peakPct  = m.peakTotal > 0 ? m.peakLines / m.peakTotal * 100 : 0;
+      const peakPct  = m.peakShare || 0;
 
       document.getElementById('panel-color-bar').style.background = '#64748b';
       document.getElementById('panel-name').textContent  = m.name;
@@ -811,19 +811,18 @@
     function showRawPanel(rawIdx) {
       const ds   = DATA.datasets[rawIdx];
       const abs  = ds.absData;
+      const pct  = ds.pctData;
       const last = abs.length - 1;
 
-      let peak = 0, peakIdx = 0, firstIdx = -1;
+      let peak = 0, peakPct = 0, firstIdx = -1;
       for (let i = 0; i <= last; i++) {
-        if (abs[i] > peak) { peak = abs[i]; peakIdx = i; }
+        if (abs[i] > peak)  { peak    = abs[i]; }
+        if (pct[i] > peakPct) { peakPct = pct[i]; }
         if (firstIdx < 0 && abs[i] > 0) firstIdx = i;
       }
       const finalLines = abs[last];
-      const totalNow   = DATA.datasets.reduce((s, d) => s + (d.absData[last] || 0), 0);
+      const totalNow   = DATA.totalAbs ? DATA.totalAbs[last] : DATA.datasets.reduce((s, d) => s + (d.absData[last] || 0), 0);
       const finalPct   = totalNow > 0 ? finalLines / totalNow * 100 : 0;
-      let totalAtPeak  = 0;
-      DATA.datasets.forEach(d => totalAtPeak += d.absData[peakIdx] || 0);
-      const peakPct    = totalAtPeak > 0 ? peak / totalAtPeak * 100 : 0;
       const firstDate  = firstIdx >= 0 ? DATA.labels[firstIdx].split(' ')[0] : '—';
       const lastDate   = DATA.labels[last].split(' ')[0];
 

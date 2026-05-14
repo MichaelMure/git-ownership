@@ -35,10 +35,13 @@ func buildAllFolderData(snaps []Snapshot, emailToName map[string]string, maxBand
 		}
 		return email
 	}
+	normalise := func(name string) string {
+		return strings.ToLower(strings.TrimSpace(name))
+	}
 	nameTotals := make(map[string]int)
 	for _, s := range snaps {
 		for email, n := range s.Totals {
-			nameTotals[displayName(email)] += n
+			nameTotals[normalise(displayName(email))] += n
 		}
 	}
 	type nameTotal struct{ name string; total int }
@@ -91,12 +94,12 @@ type chartDataset struct {
 // member is an author excluded from the chart datasets (beyond --max-graph)
 // but included in the search index with their stats (no time-series).
 type member struct {
-	Name       string `json:"name"`
-	Email      string `json:"email"`
-	FinalLines int    `json:"finalLines"`
-	PeakLines  int    `json:"peakLines"`
-	PeakTotal  int    `json:"peakTotal"`  // total repo lines at peak snapshot (for peak share)
-	FirstDate  string `json:"firstDate"`
+	Name       string  `json:"name"`
+	Email      string  `json:"email"`
+	FinalLines int     `json:"finalLines"`
+	PeakLines  int     `json:"peakLines"`
+	PeakShare  float64 `json:"peakShare"` // max ownership % across all snapshots
+	FirstDate  string  `json:"firstDate"`
 	LastDate   string `json:"lastDate"`
 }
 
@@ -157,7 +160,11 @@ func buildChart(snaps []Snapshot, emailToName map[string]string, maxBands int, g
 		}
 	}
 
-	// Merge emails that share the same display name into one entry.
+	normalise := func(name string) string {
+		return strings.ToLower(strings.TrimSpace(name))
+	}
+
+	// Merge emails that share the same normalised display name into one entry.
 	type group struct {
 		name   string
 		emails []string
@@ -166,10 +173,11 @@ func buildChart(snaps []Snapshot, emailToName map[string]string, maxBands int, g
 	nameToGroup := make(map[string]*group)
 	for email, t := range emailTotals {
 		name := displayName(email)
-		g, ok := nameToGroup[name]
+		key := normalise(name)
+		g, ok := nameToGroup[key]
 		if !ok {
 			g = &group{name: name}
-			nameToGroup[name] = g
+			nameToGroup[key] = g
 		}
 		g.emails = append(g.emails, email)
 		g.total += t
@@ -182,8 +190,8 @@ func buildChart(snaps []Snapshot, emailToName map[string]string, maxBands int, g
 	// Sort by global rank so dataset order (= stack order) is identical across
 	// all folders. Authors absent from globalRank fall back to local total.
 	sort.Slice(groups, func(i, j int) bool {
-		ri, oki := globalRank[groups[i].name]
-		rj, okj := globalRank[groups[j].name]
+		ri, oki := globalRank[normalise(groups[i].name)]
+		rj, okj := globalRank[normalise(groups[j].name)]
 		if oki && okj { return ri < rj }
 		if oki { return true }
 		if okj { return false }
@@ -241,7 +249,8 @@ func buildChart(snaps []Snapshot, emailToName map[string]string, maxBands int, g
 	// Build the searchable members list from excluded groups.
 	var members []member
 	for _, g := range excludedGroups {
-		var peak, peakTotal, finalLines int
+		var peak, finalLines int
+		var peakShare float64
 		var prevV int
 		var firstDate, lastDate string
 		for j, s := range snaps {
@@ -254,7 +263,11 @@ func buildChart(snaps []Snapshot, emailToName map[string]string, maxBands int, g
 			}
 			if v > peak {
 				peak = v
-				peakTotal = s.Total
+			}
+			if s.Total > 0 {
+				if share := float64(v) / float64(s.Total) * 100; share > peakShare {
+					peakShare = share
+				}
 			}
 			if j == len(snaps)-1 {
 				finalLines = v
@@ -269,7 +282,7 @@ func buildChart(snaps []Snapshot, emailToName map[string]string, maxBands int, g
 			Email:      strings.Join(g.emails, ", "),
 			FinalLines: finalLines,
 			PeakLines:  peak,
-			PeakTotal:  peakTotal,
+			PeakShare:  peakShare,
 			FirstDate:  firstDate,
 			LastDate:   lastDate,
 		})
