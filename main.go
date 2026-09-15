@@ -17,7 +17,6 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"regexp"
 	"runtime"
 	"sort"
 	"strings"
@@ -35,16 +34,27 @@ func main() {
 		"number of largest folders to break down (searched at any depth); 0 = whole project only")
 	workersFlag := flag.Int("workers", runtime.NumCPU(),
 		"parallel git log workers (default: number of CPUs)")
-	excludeRegexFlag := flag.String("exclude-regex", "",
-		"exclude file paths matching this regex (e.g. ^vendor/)")
+	var includeFlag, excludeFlag, excludeRegexFlag stringList
+	flag.Var(&includeFlag, "include",
+		"only track paths matching this gitignore-style `pattern` (repeatable)")
+	flag.Var(&excludeFlag, "exclude",
+		"exclude paths matching this gitignore-style `pattern` (repeatable, e.g. vendor/ or '*.pb.go')")
+	flag.Var(&excludeRegexFlag, "exclude-regex",
+		"exclude file paths matching this `regex` (repeatable, e.g. ^vendor/)")
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: git-ownership [flags] <repo-path>\n\nFlags:\n")
 		flag.PrintDefaults()
 		fmt.Fprintf(os.Stderr, `
+Patterns (--include, --exclude) follow .gitignore syntax: without a "/" they
+match a name at any depth, a leading "/" anchors to the repo root, a trailing
+"/" matches directories only, and "**" matches any number of directories.
+
 Examples:
   git-ownership .
   git-ownership --branch main /path/to/repo
   git-ownership --output graph.html --max-points 0 .
+  git-ownership --exclude vendor/ --exclude '*.pb.go' /path/to/repo
+  git-ownership --include /pkg/ --exclude testdata/ /path/to/repo
   git-ownership --exclude-regex '^vendor/' /path/to/repo
 `)
 	}
@@ -54,13 +64,9 @@ Examples:
 		repo = flag.Arg(0)
 	}
 
-	var excludeRe *regexp.Regexp
-	if *excludeRegexFlag != "" {
-		var reErr error
-		excludeRe, reErr = regexp.Compile(*excludeRegexFlag)
-		if reErr != nil {
-			log.Fatalf("invalid --exclude-regex: %v", reErr)
-		}
+	filter, err := newPathFilter(includeFlag, excludeFlag, excludeRegexFlag)
+	if err != nil {
+		log.Fatal(err)
 	}
 
 	absRepo, err := filepath.Abs(repo)
@@ -87,7 +93,7 @@ Examples:
 	if *folderFlag > 0 {
 		fmt.Print("Folders    : scanning… ")
 		var dirErr error
-		selectedDirs, selectedFileCounts, totalFiles, dirErr = selectFolders(absRepo, *branchFlag, *folderFlag, excludeRe)
+		selectedDirs, selectedFileCounts, totalFiles, dirErr = selectFolders(absRepo, *branchFlag, *folderFlag, filter)
 		if dirErr != nil {
 			fmt.Printf("\rFolders    : (skipped: %v)\n", dirErr)
 			selectedDirs = nil
@@ -212,7 +218,7 @@ Examples:
 	start := time.Now()
 	i := 0
 
-	if err := streamLog(absRepo, *branchFlag, *workersFlag, state, excludeRe, func(c CommitMeta) error {
+	if err := streamLog(absRepo, *branchFlag, *workersFlag, state, filter, func(c CommitMeta) error {
 		if c.AuthorName != "" {
 			emailToName[c.AuthorEmail] = c.AuthorName
 		}
@@ -251,3 +257,9 @@ Examples:
 
 	fmt.Printf("Output     : %s\n", outFile)
 }
+
+// stringList is a flag.Value collecting every occurrence of a repeatable flag.
+type stringList []string
+
+func (s *stringList) String() string     { return strings.Join(*s, ", ") }
+func (s *stringList) Set(v string) error { *s = append(*s, v); return nil }

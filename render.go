@@ -1,5 +1,3 @@
-// render.go — HTML template rendering.
-
 package main
 
 import (
