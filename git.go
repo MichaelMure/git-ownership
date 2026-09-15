@@ -372,23 +372,12 @@ func fetchChunk(repo, endHash, excludeHash string) <-chan parsedCommit {
 }
 
 // applyEvents applies pre-parsed diff events to state on behalf of author.
-func applyEvents(state *State, author string, events []diffEvent, filter *pathFilter) {
+func applyEvents(state *State, author string, events []diffEvent) {
 	offsets := make(map[string]int)
 	for _, e := range events {
 		if e.renameTo != "" {
-			fromExcluded := filter.excluded(e.file)
-			toExcluded := filter.excluded(e.renameTo)
-			if !fromExcluded && toExcluded {
-				// Moving into an excluded path: remove tracking for the source.
-				state.deleteFile(e.file)
-			} else if !fromExcluded && !toExcluded {
-				state.renameFile(e.file, e.renameTo)
-			}
-			// If fromExcluded: file was never tracked, nothing to do.
+			state.renameFile(e.file, e.renameTo)
 			delete(offsets, e.file)
-			continue
-		}
-		if filter.excluded(e.file) {
 			continue
 		}
 		off := offsets[e.file]
@@ -401,7 +390,7 @@ func applyEvents(state *State, author string, events []diffEvent, filter *pathFi
 
 // streamLog splits history into workers chunks, fetches them concurrently,
 // and applies commits in order via fn. State is mutated synchronously.
-func streamLog(repo, branch string, workers int, state *State, filter *pathFilter, fn func(CommitMeta) error) error {
+func streamLog(repo, branch string, workers int, state *State, fn func(CommitMeta) error) error {
 	hashes, err := getHashes(repo, branch)
 	if err != nil {
 		return err
@@ -447,7 +436,7 @@ func streamLog(repo, branch string, workers int, state *State, filter *pathFilte
 	for _, ch := range channels {
 		for pc := range ch {
 			if !pc.meta.IsMerge {
-				applyEvents(state, pc.meta.AuthorEmail, pc.events, filter)
+				applyEvents(state, pc.meta.AuthorEmail, pc.events)
 			}
 			if err := fn(pc.meta); err != nil {
 				return err

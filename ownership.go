@@ -89,13 +89,40 @@ func insertAt(segs []Seg, pos int, author string, count int) []Seg {
 
 
 // State is the full ownership picture of the repo at a point in time.
+//
+// Files excluded by the filter are still replayed into Untracked, but don't
+// count towards Totals. That way a file moved across the filter boundary keeps
+// its original authors, and filtering never changes who owns a line.
 type State struct {
-	Files  map[string][]Seg // filepath → RLE ownership
-	Totals map[string]int   // author email → total lines
+	Files     map[string][]Seg // tracked filepath → RLE ownership
+	Untracked map[string][]Seg // excluded filepath → RLE ownership
+	Totals    map[string]int   // author email → total lines in tracked files
+
+	filter *pathFilter
 }
 
-func newState() *State {
-	return &State{Files: make(map[string][]Seg), Totals: make(map[string]int)}
+func newState(filter *pathFilter) *State {
+	return &State{
+		Files:     make(map[string][]Seg),
+		Untracked: make(map[string][]Seg),
+		Totals:    make(map[string]int),
+		filter:    filter,
+	}
+}
+
+// filesFor returns the map holding file, and whether it counts towards Totals.
+func (st *State) filesFor(file string) (map[string][]Seg, bool) {
+	if st.filter.excluded(file) {
+		return st.Untracked, false
+	}
+	return st.Files, true
+}
+
+func (st *State) subTotal(author string, n int) {
+	st.Totals[author] -= n
+	if st.Totals[author] <= 0 {
+		delete(st.Totals, author)
+	}
 }
 
 func (st *State) totalLines() int {
@@ -123,7 +150,8 @@ func (st *State) copyTotals() map[string]int {
 //
 //	offset += A - D
 func (st *State) applyHunk(file string, oldStart, oldCount, newCount int, author string, offset *int) {
-	segs := st.Files[file]
+	files, tracked := st.filesFor(file)
+	segs := files[file]
 
 	if oldCount > 0 {
 		delPos := oldStart - 1 + *offset
@@ -132,10 +160,9 @@ func (st *State) applyHunk(file string, oldStart, oldCount, newCount int, author
 		}
 		newSegs, removed := deleteRange(segs, delPos, oldCount)
 		segs = newSegs
-		for a, n := range removed {
-			st.Totals[a] -= n
-			if st.Totals[a] <= 0 {
-				delete(st.Totals, a)
+		if tracked {
+			for a, n := range removed {
+				st.subTotal(a, n)
 			}
 		}
 	}
@@ -153,22 +180,40 @@ func (st *State) applyHunk(file string, oldStart, oldCount, newCount int, author
 			insertPos = 0
 		}
 		segs = insertAt(segs, insertPos, author, newCount)
-		st.Totals[author] += newCount
+		if tracked {
+			st.Totals[author] += newCount
+		}
 	}
 
 	*offset += newCount - oldCount
 
 	if len(segs) == 0 {
-		delete(st.Files, file)
+		delete(files, file)
 	} else {
-		st.Files[file] = segs
+		files[file] = segs
 	}
 }
 
+// renameFile moves ownership from one path to another, updating Totals when
+// the file crosses the filter boundary.
 func (st *State) renameFile(from, to string) {
-	if segs, ok := st.Files[from]; ok {
-		st.Files[to] = segs
-		delete(st.Files, from)
+	src, fromTracked := st.filesFor(from)
+	dst, toTracked := st.filesFor(to)
+	segs, ok := src[from]
+	if !ok {
+		return
+	}
+	delete(src, from)
+	dst[to] = segs
+	if fromTracked == toTracked {
+		return
+	}
+	for _, s := range segs {
+		if toTracked {
+			st.Totals[s.Author] += s.N
+		} else {
+			st.subTotal(s.Author, s.N)
+		}
 	}
 }
 
@@ -200,16 +245,4 @@ func (st *State) computeDirTotals(trackDirs map[string]bool) map[string]map[stri
 		}
 	}
 	return result
-}
-
-func (st *State) deleteFile(file string) {
-	if segs, ok := st.Files[file]; ok {
-		for _, s := range segs {
-			st.Totals[s.Author] -= s.N
-			if st.Totals[s.Author] <= 0 {
-				delete(st.Totals, s.Author)
-			}
-		}
-		delete(st.Files, file)
-	}
 }
