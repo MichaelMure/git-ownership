@@ -211,14 +211,14 @@ Examples:
 	}
 
 	// 4. Replay history with parallel git workers.
-	state := newState()
+	state := newState(filter)
 	var snaps []Snapshot
 	emailToName := make(map[string]string)
 
 	start := time.Now()
 	i := 0
 
-	if err := streamLog(absRepo, *branchFlag, *workersFlag, state, filter, func(c CommitMeta) error {
+	if err := streamLog(absRepo, *branchFlag, *workersFlag, state, func(c CommitMeta) error {
 		if c.AuthorName != "" {
 			emailToName[c.AuthorEmail] = c.AuthorName
 		}
