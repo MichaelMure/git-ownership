@@ -7,7 +7,6 @@ import (
 	"bytes"
 	"fmt"
 	"os/exec"
-	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -56,7 +55,7 @@ func commitCount(repo, branch string) (int, error) {
 // directories and repeatedly expand the largest into its children until n
 // candidates are found. File count proxies for line count (fast, no blame).
 // selectFolders returns selected folder paths and their file counts (proxy for size).
-func selectFolders(repo, branch string, n int, excludeRe *regexp.Regexp) ([]string, map[string]int, int, error) {
+func selectFolders(repo, branch string, n int, filter *pathFilter) ([]string, map[string]int, int, error) {
 	out, err := gitCmd(repo, "ls-tree", "-r", "--name-only", branch)
 	if err != nil {
 		return nil, nil, 0, err
@@ -85,7 +84,7 @@ func selectFolders(repo, branch string, n int, excludeRe *regexp.Regexp) ([]stri
 		if hidden {
 			continue
 		}
-		if excludeRe != nil && excludeRe.MatchString(file) {
+		if filter.excluded(file) {
 			continue
 		}
 		totalFiles++
@@ -373,12 +372,12 @@ func fetchChunk(repo, endHash, excludeHash string) <-chan parsedCommit {
 }
 
 // applyEvents applies pre-parsed diff events to state on behalf of author.
-func applyEvents(state *State, author string, events []diffEvent, excludeRe *regexp.Regexp) {
+func applyEvents(state *State, author string, events []diffEvent, filter *pathFilter) {
 	offsets := make(map[string]int)
 	for _, e := range events {
 		if e.renameTo != "" {
-			fromExcluded := excludeRe != nil && excludeRe.MatchString(e.file)
-			toExcluded := excludeRe != nil && excludeRe.MatchString(e.renameTo)
+			fromExcluded := filter.excluded(e.file)
+			toExcluded := filter.excluded(e.renameTo)
 			if !fromExcluded && toExcluded {
 				// Moving into an excluded path: remove tracking for the source.
 				state.deleteFile(e.file)
@@ -389,7 +388,7 @@ func applyEvents(state *State, author string, events []diffEvent, excludeRe *reg
 			delete(offsets, e.file)
 			continue
 		}
-		if excludeRe != nil && excludeRe.MatchString(e.file) {
+		if filter.excluded(e.file) {
 			continue
 		}
 		off := offsets[e.file]
@@ -402,7 +401,7 @@ func applyEvents(state *State, author string, events []diffEvent, excludeRe *reg
 
 // streamLog splits history into workers chunks, fetches them concurrently,
 // and applies commits in order via fn. State is mutated synchronously.
-func streamLog(repo, branch string, workers int, state *State, excludeRe *regexp.Regexp, fn func(CommitMeta) error) error {
+func streamLog(repo, branch string, workers int, state *State, filter *pathFilter, fn func(CommitMeta) error) error {
 	hashes, err := getHashes(repo, branch)
 	if err != nil {
 		return err
@@ -448,7 +447,7 @@ func streamLog(repo, branch string, workers int, state *State, excludeRe *regexp
 	for _, ch := range channels {
 		for pc := range ch {
 			if !pc.meta.IsMerge {
-				applyEvents(state, pc.meta.AuthorEmail, pc.events, excludeRe)
+				applyEvents(state, pc.meta.AuthorEmail, pc.events, filter)
 			}
 			if err := fn(pc.meta); err != nil {
 				return err

@@ -66,11 +66,28 @@ git-ownership /path/to/repo
 
 This writes `<reponame>.html` in the current directory. Open it in a browser.
 
-To exclude vendor or generated directories from ownership tracking:
+To exclude vendor or generated files from ownership tracking, or to restrict
+it to part of the repo (all three flags can be repeated):
 
 ```
+git-ownership --exclude vendor/ --exclude '*.pb.go' /path/to/repo
+git-ownership --include /pkg/ --exclude testdata/ /path/to/repo
 git-ownership --exclude-regex '^vendor/' /path/to/repo
 ```
+
+`--include` and `--exclude` patterns follow `.gitignore` syntax:
+
+| Pattern          | Matches                                                  |
+|------------------|----------------------------------------------------------|
+| `vendor`         | any file or directory named `vendor`, at any depth       |
+| `vendor/`        | any directory named `vendor`, at any depth               |
+| `/vendor/`       | only the `vendor` directory at the repo root             |
+| `*.pb.go`        | any file ending in `.pb.go`, at any depth                |
+| `docs/*.md`      | `.md` files directly in the root `docs` directory        |
+| `**/testdata/**` | everything under any `testdata` directory                |
+
+A file is tracked when it matches at least one `--include` (if any are given)
+and no `--exclude` or `--exclude-regex`. Negation (`!pattern`) is not supported.
 
 ### Flags
 
@@ -82,7 +99,9 @@ git-ownership --exclude-regex '^vendor/' /path/to/repo
 | `--max-graph`      | `50`              | Max authors included as individual chart datasets (0 = all)                  |
 | `--folder`         | `10`              | Number of sub-folders to break down (0 = whole repo only)                    |
 | `--workers`        | num CPUs          | Parallel `git log` workers                                                   |
-| `--exclude-regex`  | _(none)_          | Exclude file paths matching this regex (e.g. `^vendor/`)                     |
+| `--include`        | _(all)_           | Only track paths matching this pattern (repeatable)                          |
+| `--exclude`        | _(none)_          | Exclude paths matching this pattern (repeatable, e.g. `vendor/`)             |
+| `--exclude-regex`  | _(none)_          | Exclude file paths matching this regex (repeatable, e.g. `^vendor/`)         |
 
 ## Output
 
