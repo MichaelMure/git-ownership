@@ -31,7 +31,104 @@
     .card-toolbar {
       display: flex; align-items: center; gap: .6rem; flex-shrink: 0;
     }
-    .chart-wrap { position: relative; flex: 1; min-height: 300px; }
+    /* min-height 0, not 300px: the split divider may shrink the chart to nothing */
+    .chart-wrap { position: relative; flex: 1; min-height: 0; }
+
+    /* split: chart above, breakdown roster below */
+    .split-divider {
+      flex-shrink: 0; height: 11px; cursor: row-resize;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .split-divider::after {
+      content: ''; width: 46px; height: 3px; border-radius: 2px;
+      background: #334155; transition: background .15s;
+    }
+    .split-divider:hover::after, .split-divider.dragging::after { background: #3b82f6; }
+
+    .roster-pane {
+      flex-shrink: 0; display: flex; flex-direction: column; gap: .45rem;
+      min-height: 0; overflow: hidden;
+    }
+    .roster-head {
+      display: flex; align-items: baseline; gap: .6rem;
+      flex-shrink: 0; font-size: .78rem; color: #94a3b8;
+    }
+    .roster-head strong { color: #e2e8f0; font-weight: 600; }
+    .roster-actions { margin-left: auto; display: flex; gap: .4rem; }
+    .roster-copy {
+      background: #0f172a; border: 1px solid #475569; border-radius: .4rem;
+      color: #94a3b8; font-family: inherit; font-size: .72rem;
+      padding: .25rem .55rem; cursor: pointer; transition: border-color .15s, color .15s;
+    }
+    .roster-copy:hover { border-color: #3b82f6; color: #fff; }
+
+    .roster-scroll { overflow-y: auto; flex: 1; min-height: 0; }
+    .roster-row {
+      display: grid; align-items: baseline; gap: .5rem;
+      grid-template-columns: 2.2rem minmax(0,1fr) 5.5rem 4.2rem 4.4rem 5.2rem 5.2rem;
+      padding: .28rem .6rem; border-radius: .35rem; font-size: .78rem; color: #cbd5e1;
+    }
+    .roster-row.head {
+      position: sticky; top: 0; z-index: 2; background: #1e293b; border-radius: 0;
+      color: #64748b; font-size: .68rem; text-transform: uppercase; letter-spacing: .04em;
+      border-bottom: 1px solid #334155;
+    }
+    .roster-row.head [data-sort] { cursor: pointer; }
+    .roster-row.head [data-sort]:hover { color: #cbd5e1; }
+    .roster-row:not(.head) { cursor: pointer; }
+    .roster-row:not(.head):hover { background: #1e3a5f; }
+    .roster-row.tail { color: #94a3b8; }
+    .roster-row.selected, .roster-row.selected:hover {
+      background: #1e3a5f; outline: 1px solid #3b82f6; outline-offset: -1px;
+    }
+    .roster-rank { color: #64748b; font-variant-numeric: tabular-nums; }
+    .roster-name { display: flex; align-items: center; gap: .45rem; min-width: 0; }
+    .roster-name span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .roster-chip { width: 9px; height: 9px; border-radius: 2px; flex-shrink: 0; }
+    .roster-chip.hollow { background: transparent; border: 1px solid #64748b; }
+    .roster-n { text-align: right; font-variant-numeric: tabular-nums; }
+    .roster-dim { color: #64748b; }
+    .roster-more {
+      padding: .4rem .6rem; font-size: .75rem; color: #94a3b8;
+      border-radius: .35rem; cursor: pointer;
+    }
+    .roster-more:hover { background: #1e3a5f; color: #e2e8f0; }
+    .roster-more.static, .roster-more.static:hover {
+      cursor: default; background: transparent; color: #64748b;
+    }
+    /* column priority as the pane narrows (the 420px author panel squeezes it) */
+    .roster-pane.narrow .col-last { display: none; }
+    .roster-pane.narrow .roster-row {
+      grid-template-columns: 2.2rem minmax(0,1fr) 5.5rem 4.2rem 4.4rem 5.2rem;
+    }
+    .roster-pane.tiny .col-first { display: none; }
+    .roster-pane.tiny .roster-row {
+      grid-template-columns: 2.2rem minmax(0,1fr) 5.5rem 4.2rem 4.4rem;
+    }
+
+    /* pinned-snapshot bar */
+    .pin-bar {
+      display: flex; align-items: center; justify-content: center; gap: .5rem;
+      flex-shrink: 0; font-size: .8rem;
+    }
+    .pin-btn {
+      background: #0f172a; border: 1px solid #475569; border-radius: .4rem;
+      color: #cbd5e1; font-family: inherit; font-size: .75rem; line-height: 1;
+      padding: .35rem .55rem; cursor: pointer; transition: border-color .15s, color .15s;
+    }
+    .pin-btn:hover:not(:disabled) { border-color: #3b82f6; color: #fff; }
+    .pin-btn:disabled { opacity: .3; cursor: default; }
+    .pin-readout {
+      display: flex; align-items: baseline; gap: .45rem; white-space: nowrap;
+      background: #0f172a; border: 1px solid #334155; border-radius: .4rem;
+      padding: .3rem .75rem;
+    }
+    .pin-date  { color: #e2e8f0; font-variant-numeric: tabular-nums; }
+    .pin-hash  { color: #60a5fa; font-family: monospace; }
+    .pin-sep   { color: #475569; }
+    .pin-lines { color: #94a3b8; font-variant-numeric: tabular-nums; }
+    .pin-pos   { color: #64748b; font-size: .72rem; font-variant-numeric: tabular-nums; }
+    .pin-hint  { color: #475569; font-size: .72rem; margin-left: .35rem; }
 
     /* mode toggle */
     .toggle-group { display: flex; background: #0f172a; border-radius: .4rem; overflow: hidden; border: 1px solid #334155; }
@@ -209,6 +306,37 @@
         </div>
       </div>
       <div class="chart-wrap"><canvas id="chart"></canvas></div>
+      <div class="pin-bar">
+        <button class="pin-btn" id="pin-first" onclick="setPin(0)"
+                title="First snapshot (Home)">&#x23EE;</button>
+        <button class="pin-btn" id="pin-prev" onclick="stepPin(event.shiftKey ? -10 : -1)"
+                title="Previous snapshot (←, shift for ×10)">&#x25C0;</button>
+        <div class="pin-readout">
+          <span class="pin-date"  id="pin-date"></span>
+          <span class="pin-sep">·</span>
+          <span class="pin-hash"  id="pin-hash"></span>
+          <span class="pin-sep">·</span>
+          <span class="pin-lines" id="pin-lines"></span>
+          <span class="pin-pos"   id="pin-pos"></span>
+        </div>
+        <button class="pin-btn" id="pin-next" onclick="stepPin(event.shiftKey ? 10 : 1)"
+                title="Next snapshot (→, shift for ×10)">&#x25B6;</button>
+        <button class="pin-btn" id="pin-head" onclick="setPin(DATA.labels.length - 1)"
+                title="Jump to the last snapshot (End)">&#x21E5; HEAD</button>
+        <span class="pin-hint">click a band for its author · drag to scrub</span>
+      </div>
+      <div class="split-divider" id="split-divider"
+           title="Drag to resize · double-click to cycle chart / split / table"></div>
+      <div class="roster-pane" id="roster-pane">
+        <div class="roster-head">
+          <span id="roster-summary"></span>
+          <span class="roster-actions">
+            <button class="roster-copy" onclick="copyRoster('csv', this)">copy CSV</button>
+            <button class="roster-copy" onclick="copyRoster('md', this)">copy MD</button>
+          </span>
+        </div>
+        <div class="roster-scroll" id="roster-scroll"></div>
+      </div>
     </div>
 
     <div class="author-panel hidden" id="author-panel">
@@ -227,6 +355,7 @@
 
   <script>
     const FOLDERS = {{.FoldersJSON}};
+    const REPO    = "{{.Repo}}";
     let DATA = FOLDERS[0].chart;
     let mode  = 'abs';
     let xMode = 'commits'; // 'commits' (even spacing) | 'time' (linear calendar)
@@ -234,6 +363,11 @@
     let hoveredDatasetIdx = -1;
     let currentFolderIdx = 0;
     let currentBands = Math.min(20, DATA.datasets.length);
+    // Snapshot index the crosshair is parked on. Always a snapshot index
+    // (0…labels.length-1), never a plotted point index — in time mode the chart
+    // draws a day-deduplicated subset (timeOrder), so the two differ. Starts on
+    // the last snapshot, which is the one people ask about most.
+    let pinIdx = DATA.labels.length - 1;
 
     // ── displayDatasets ───────────────────────────────────────────────────────
     // Returns the top-currentBands individual datasets plus a synthetic Others
@@ -425,6 +559,497 @@
       return ds.rawData ? ds.rawData[pointIdx] : 0;
     }
 
+    // ── pinned snapshot ───────────────────────────────────────────────────────
+    function setPin(idx) {
+      pinIdx = Math.max(0, Math.min(DATA.labels.length - 1, idx));
+      updatePinBar();
+      // Synchronous: the table must never disagree with the readout above it,
+      // and a render measures well under a millisecond. Only the chart redraw,
+      // which is the expensive half, waits for a frame.
+      if (rosterVisible()) renderRoster();
+      requestPinDraw();
+    }
+
+    function stepPin(delta) { setPin(pinIdx + delta); }
+
+    // Redrawing on every pointermove of a scrub is wasteful — coalesce to one
+    // draw per frame. render() reuses the parsed data, unlike update().
+    let pinFrame = 0;
+    function requestPinDraw() {
+      if (pinFrame) return;
+      pinFrame = requestAnimationFrame(() => { pinFrame = 0; chart.render(); });
+    }
+
+    function updatePinBar() {
+      const last = DATA.labels.length - 1;
+      pinIdx = Math.max(0, Math.min(last, pinIdx)); // self-correct on folder switch
+      const label = DATA.labels[pinIdx] || '';
+      const total = DATA.totalAbs ? DATA.totalAbs[pinIdx] : 0;
+      // Label format is "YYYY-MM-DD hash7".
+      document.getElementById('pin-date').textContent  = label.slice(0, 10);
+      document.getElementById('pin-hash').textContent  = label.slice(11);
+      // Exact count, not fmtLines: this readout is meant to be quotable.
+      document.getElementById('pin-lines').textContent = total.toLocaleString() + ' lines';
+      document.getElementById('pin-pos').textContent   = (pinIdx + 1) + '/' + (last + 1);
+      document.getElementById('pin-first').disabled = pinIdx === 0;
+      document.getElementById('pin-prev').disabled  = pinIdx === 0;
+      document.getElementById('pin-next').disabled  = pinIdx === last;
+      document.getElementById('pin-head').disabled  = pinIdx === last;
+    }
+
+    // Pixel x of the pinned snapshot, or null when it can't be placed.
+    // Takes the chart instance rather than closing over `chart`: the plugin
+    // below draws once from inside `new Chart(...)`, before that const exists.
+    function pinPixel(c) {
+      const sx = c.scales.x;
+      if (!sx) return null;
+      const px = xMode === 'time'
+        ? sx.getPixelForValue(timestamps[pinIdx])  // linear scale: ms value
+        : sx.getPixelForValue(pinIdx);             // category scale: index
+      return Number.isFinite(px) ? px : null;
+    }
+
+    // Inverse of pinPixel: which snapshot does this pixel x point at?
+    function snapshotAtPixel(px) {
+      const sx = chart.scales.x;
+      if (xMode !== 'time') return Math.round(sx.getValueForPixel(px));
+      // Time mode plots only the timeOrder subset, each at its own snapshot's
+      // timestamp — snap to the nearest point the chart actually drew, so the
+      // crosshair can never land between two plotted days.
+      const t = sx.getValueForPixel(px);
+      let best = pinIdx, bestDist = Infinity;
+      for (const i of timeOrder) {
+        const d = Math.abs(timestamps[i] - t);
+        if (d < bestDist) { bestDist = d; best = i; }
+      }
+      return best;
+    }
+
+    // ── crosshair: dashed rule + hash badge at the pinned snapshot ────────────
+    const pinLinePlugin = {
+      id: 'pinLine',
+      afterDatasetsDraw(c) {
+        const x = pinPixel(c);
+        if (x === null) return;
+        const { ctx, chartArea: { top, bottom, left, right } } = c;
+        if (x < left - 1 || x > right + 1) return;
+
+        ctx.save();
+        ctx.beginPath();
+        ctx.setLineDash([4, 4]);
+        ctx.lineWidth = 1;
+        ctx.strokeStyle = 'rgba(226,232,240,.65)';
+        ctx.moveTo(x, top);
+        ctx.lineTo(x, bottom);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        const text = (DATA.labels[pinIdx] || '').slice(11);
+        if (text) {
+          ctx.font = '10px monospace';
+          const w  = ctx.measureText(text).width + 10;
+          const h  = 16;
+          const bx = Math.max(left, Math.min(right - w, x - w / 2));
+          ctx.beginPath();
+          if (ctx.roundRect) ctx.roundRect(bx, top + 2, w, h, 3);
+          else               ctx.rect(bx, top + 2, w, h);
+          ctx.fillStyle   = '#0f172a';
+          ctx.strokeStyle = '#475569';
+          ctx.fill();
+          ctx.stroke();
+          ctx.fillStyle    = '#cbd5e1';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(text, bx + 5, top + 2 + h / 2);
+        }
+        ctx.restore();
+      },
+    };
+
+    // ── breakdown roster: every author at the pinned snapshot ─────────────────
+    // Built only from data the page already carries. datasets[] hold a full
+    // series, so the graphed authors are exact at any snapshot; members[] hold
+    // finalLines and no series, so the tail can be itemised at the last
+    // snapshot and only summed as a residual anywhere else.
+    const ROSTER_TOP = 50; // rows shown before the rest is folded into one line
+
+    // ── selection: whichever author the panel is showing ──────────────────────
+    // Keyed rather than indexed, because a rank changes as you scrub and a tail
+    // author has no dataset index at all.
+    let selectedKey = null;  // 'd<rawIdx>' | 'm<email>' | null
+    let scrollToSel = false; // consumed by the next render
+
+    function rowKey(r) { return r.member ? 'm' + (r.email || r.name) : 'd' + r.rawIdx; }
+
+    function selectAuthor(key) {
+      if (key !== selectedKey) scrollToSel = key !== null; // only on a change
+      selectedKey = key;
+      if (rosterVisible()) renderRoster();
+    }
+
+    // Minimal scroll that also clears the sticky header, which block:'nearest'
+    // would happily tuck a row underneath.
+    function scrollRowIntoView(el) {
+      const box   = document.getElementById('roster-scroll');
+      const head  = box.querySelector('.roster-row.head');
+      const headH = head ? head.offsetHeight : 0;
+      const br = box.getBoundingClientRect();
+      const er = el.getBoundingClientRect();
+      if (er.top < br.top + headH)    box.scrollTop += er.top - br.top - headH;
+      else if (er.bottom > br.bottom) box.scrollTop += er.bottom - br.bottom;
+    }
+    let rosterSort = { key: 'lines', dir: 'desc' };
+    let tailOpen   = false;
+    let lastRoster = null;       // last rendered model, so exports match the view
+    const metaCache = new Map(); // folderIdx → per-dataset {first,last}
+
+    function esc(s) {
+      return String(s == null ? '' : s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    // first = first snapshot with any lines, last = last snapshot where the
+    // count grew. Deliberately the same rule Go uses for members (chart.go), or
+    // the two halves of the table would disagree under identical headings.
+    function datasetMeta() {
+      let m = metaCache.get(currentFolderIdx);
+      if (m) return m;
+      m = DATA.datasets.map(ds => {
+        let first = '', last = '', prev = 0;
+        for (let i = 0; i < ds.absData.length; i++) {
+          const v = ds.absData[i] || 0;
+          if (v > 0 && !first) first = DATA.labels[i].slice(0, 10);
+          if (v > prev) last = DATA.labels[i].slice(0, 10);
+          prev = v;
+        }
+        return { first, last };
+      });
+      metaCache.set(currentFolderIdx, m);
+      return m;
+    }
+
+    // Authors still owning lines at the last snapshot, for the current folder.
+    // The header used to show DATA.datasets.length here, which is the graphed
+    // count (--max-graph) — visibly at odds with the roster's own total.
+    function headAuthorCount() {
+      const last = DATA.labels.length - 1;
+      let n = DATA.datasets.reduce((s, ds) => s + ((ds.absData[last] || 0) > 0 ? 1 : 0), 0);
+      if (DATA.members) n += DATA.members.filter(m => m.finalLines > 0).length;
+      return n;
+    }
+
+    function buildRoster() {
+      const meta   = datasetMeta();
+      const atHead = pinIdx === DATA.labels.length - 1;
+      const total  = (DATA.totalAbs && DATA.totalAbs[pinIdx]) || 0;
+      const rows   = [];
+      DATA.datasets.forEach((ds, rawIdx) => {
+        const lines = ds.absData[pinIdx] || 0;
+        if (lines <= 0) return;
+        rows.push({
+          rawIdx, member: null, name: ds.label, email: ds.email,
+          color: ds.borderColor, lines, pct: ds.pctData[pinIdx] || 0,
+          first: meta[rawIdx].first, last: meta[rawIdx].last,
+        });
+      });
+      const graphed  = rows.reduce((s, r) => s + r.lines, 0);
+      const tailRows = (atHead && DATA.members ? DATA.members : [])
+        .filter(m => m.finalLines > 0)
+        .map(m => ({
+          rawIdx: -1, member: m, name: m.name, email: m.email, color: null,
+          lines: m.finalLines, pct: total ? m.finalLines / total * 100 : 0,
+          first: m.firstDate, last: m.lastDate,
+        }));
+      return { rows, tailRows, total, atHead, tailLines: Math.max(0, total - graphed) };
+    }
+
+    function sortRows(rows) {
+      const sign = rosterSort.dir === 'desc' ? -1 : 1;
+      const key  = rosterSort.key;
+      return rows.slice().sort((a, b) => {
+        if (key === 'name') return sign * a.name.localeCompare(b.name);
+        if (key === 'first' || key === 'last')
+          return sign * String(a[key] || '').localeCompare(String(b[key] || ''));
+        return sign * (a.lines - b.lines) || a.name.localeCompare(b.name);
+      });
+    }
+
+    // How many authors it takes to reach `target`% of the snapshot. Computed on
+    // the complete list, so a collapsed tail never changes the answer; returns
+    // null when the graphed authors alone can't get there.
+    function coverage(model, target) {
+      const all = model.rows.concat(model.tailRows)
+        .slice().sort((a, b) => b.lines - a.lines);
+      let cum = 0;
+      for (let i = 0; i < all.length; i++) {
+        cum += all[i].pct;
+        if (cum >= target) return i + 1;
+      }
+      return null;
+    }
+
+    function rosterRowHTML(r, rank, cum, showCum, displayIdx, selected) {
+      const chip = r.color
+        ? '<i class="roster-chip" style="background:' + esc(r.color) + '"></i>'
+        : '<i class="roster-chip hollow" title="not graphed"></i>';
+      return '<div class="roster-row' + (r.member ? ' tail' : '') +
+               (selected ? ' selected' : '') +
+               '" data-i="' + displayIdx + '">' +
+        '<span class="roster-rank">' + rank + '</span>' +
+        '<span class="roster-name" title="' + esc(r.email) + '">' + chip +
+          '<span>' + esc(r.name) + '</span></span>' +
+        '<span class="roster-n">' + r.lines.toLocaleString() + '</span>' +
+        '<span class="roster-n">' + r.pct.toFixed(1) + '%</span>' +
+        '<span class="roster-n' + (showCum ? '' : ' roster-dim') + '">' +
+          (showCum ? cum.toFixed(1) + '%' : '·') + '</span>' +
+        '<span class="roster-n col-first roster-dim">' + esc(r.first || '—') + '</span>' +
+        '<span class="roster-n col-last roster-dim">'  + esc(r.last  || '—') + '</span>' +
+        '</div>';
+    }
+
+    function rosterHeadHTML() {
+      const th = (key, label, cls) => {
+        const arrow = rosterSort.key === key
+          ? (rosterSort.dir === 'desc' ? ' ↓' : ' ↑') : '';
+        return '<span class="' + (cls || '') + '" data-sort="' + key + '">' +
+               label + arrow + '</span>';
+      };
+      return '<div class="roster-row head">' +
+        '<span>#</span>' +
+        th('name',  'author') +
+        th('lines', 'lines', 'roster-n') +
+        th('lines', 'share', 'roster-n') +
+        '<span class="roster-n">cum.</span>' +
+        th('first', 'first', 'roster-n col-first') +
+        th('last',  'last',  'roster-n col-last') +
+        '</div>';
+    }
+
+    function renderRoster() {
+      const model = buildRoster();
+      if (!model.atHead) tailOpen = false; // the tail is only itemisable at HEAD
+      lastRoster = model;
+
+      // Rank the tail together with the graphed authors at HEAD. --max-graph
+      // selects by lifetime totals, not by lines surviving now, so a tail
+      // author really can outrank a graphed one here — showing the graphed 50
+      // as if they were the top 50 would make the cumulative column disagree
+      // with the coverage figure in the summary.
+      const ranked = model.rows.concat(model.tailRows)
+        .sort((a, b) => b.lines - a.lines || a.name.localeCompare(b.name));
+      // If the selected author ranks below the collapsed cut, open the tail —
+      // otherwise selecting them from search would highlight nothing.
+      if (selectedKey && model.atHead && !tailOpen &&
+          ranked.findIndex(r => rowKey(r) === selectedKey) >= ROSTER_TOP) {
+        tailOpen = true;
+      }
+      const subset  = (model.atHead && !tailOpen) ? ranked.slice(0, ROSTER_TOP) : ranked;
+      const display = sortRows(subset);
+      const hidden  = ranked.length - subset.length;
+      const showCum = rosterSort.key === 'lines' && rosterSort.dir === 'desc';
+      model.display = display;
+
+      // No threshold divider rows: the cumulative column carries the same
+      // information per row, and the summary states the 90% figure outright.
+      let html = rosterHeadHTML(), cum = 0;
+      display.forEach((r, i) => {
+        cum += r.pct;
+        html += rosterRowHTML(r, i + 1, cum, showCum, i,
+                              selectedKey !== null && rowKey(r) === selectedKey);
+      });
+
+      // Tail: itemisable at HEAD (members carry finalLines), a bare residual
+      // anywhere else — where we know the lines but not how many authors.
+      const pctOf = n => model.total ? (n / model.total * 100).toFixed(1) : '0.0';
+      if (model.atHead && hidden > 0) {
+        const shown = display.reduce((s, r) => s + r.lines, 0);
+        const rest  = Math.max(0, model.total - shown);
+        html += '<div class="roster-more" data-tail="open">▸ ' +
+          hidden.toLocaleString() + ' more authors · ' +
+          rest.toLocaleString() + ' lines (' + pctOf(rest) + '%)</div>';
+      } else if (model.atHead && tailOpen && ranked.length > ROSTER_TOP) {
+        html += '<div class="roster-more" data-tail="close">▾ show top ' +
+          ROSTER_TOP + ' only</div>';
+      } else if (!model.atHead && model.tailLines > 0) {
+        html += '<div class="roster-more static" title="Authors beyond ' +
+          '--max-graph carry no series in this page, so at any snapshot but ' +
+          'the last one only their total is known, not how many they are">' +
+          'others · ' + model.tailLines.toLocaleString() +
+          ' lines (' + pctOf(model.tailLines) + '%) · not graphed</div>';
+      }
+      document.getElementById('roster-scroll').innerHTML = html;
+
+      // Only when the selection changed — re-rendering on every scrub step must
+      // not yank the scroll position around.
+      if (scrollToSel) {
+        scrollToSel = false;
+        const el = document.querySelector('#roster-scroll .roster-row.selected');
+        if (el) scrollRowIntoView(el);
+      }
+
+      const authors = model.atHead
+        ? (model.rows.length + model.tailRows.length).toLocaleString() + ' authors'
+        : model.rows.length.toLocaleString() + ' graphed' +
+          (model.tailLines > 0 ? ' + others' : '');
+      const c90 = coverage(model, 90);
+      document.getElementById('roster-summary').innerHTML =
+        '<strong>' + model.total.toLocaleString() + '</strong> lines · ' + authors +
+        (c90 ? ' · top <strong>' + c90 + '</strong> hold' + (c90 === 1 ? 's' : '') + ' 90%' : '');
+    }
+
+    // One delegated listener for sorting, row selection and the tail toggle.
+    document.getElementById('roster-scroll').addEventListener('click', e => {
+      const sorter = e.target.closest('[data-sort]');
+      if (sorter) {
+        const key = sorter.dataset.sort;
+        if (rosterSort.key === key) {
+          rosterSort.dir = rosterSort.dir === 'desc' ? 'asc' : 'desc';
+        } else {
+          rosterSort = { key, dir: key === 'name' ? 'asc' : 'desc' };
+        }
+        renderRoster();
+        return;
+      }
+      const more = e.target.closest('[data-tail]');
+      if (more) {
+        if (more.dataset.tail === 'open' || more.dataset.tail === 'close') {
+          tailOpen = more.dataset.tail === 'open';
+          renderRoster();
+        }
+        return;
+      }
+      const row = e.target.closest('.roster-row:not(.head)');
+      if (!row || !lastRoster) return;
+      const r = lastRoster.display[+row.dataset.i];
+      if (!r) return;
+      if (r.member) showMemberPanel(r.member);
+      else showRawPanel(r.rawIdx);
+    });
+
+    // ── roster export ─────────────────────────────────────────────────────────
+    const EXPORT_COLS = ['rank', 'author', 'email', 'lines', 'share_pct',
+                         'cumulative_pct', 'first_commit', 'last_commit'];
+
+    // Exports always cover everything knowable at this snapshot, whatever the
+    // view has collapsed — a partial spreadsheet is worse than none. Builds its
+    // own model rather than reading the rendered one, which can be a frame
+    // behind the pin.
+    function exportRecords(m) {
+      const all = m.rows.concat(m.tailRows)
+        .slice().sort((a, b) => b.lines - a.lines || a.name.localeCompare(b.name));
+      let cum = 0;
+      const recs = all.map((r, i) => {
+        cum += r.pct;
+        return [String(i + 1), r.name, r.email, String(r.lines),
+                r.pct.toFixed(2), cum.toFixed(2), r.first || '', r.last || ''];
+      });
+      if (!m.atHead && m.tailLines > 0) {
+        const pct = m.total ? m.tailLines / m.total * 100 : 0;
+        recs.push([String(recs.length + 1), 'others (not graphed)', '',
+                   String(m.tailLines), pct.toFixed(2), '100.00', '', '']);
+      }
+      return recs;
+    }
+
+    function toCSV(recs) {
+      const q = v => /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
+      return [EXPORT_COLS.join(',')]
+        .concat(recs.map(r => r.map(q).join(','))).join('\n');
+    }
+
+    function toMD(recs, m) {
+      const lbl  = DATA.labels[pinIdx] || '';
+      const path = FOLDERS[currentFolderIdx].path;
+      const pipe = v => String(v).replace(/\|/g, '\\|');
+      const align = EXPORT_COLS.map((_, i) => (i === 0 || (i >= 3 && i <= 5)) ? '---:' : '---');
+      return [
+        '**' + REPO + '** · ' + (path === '/' ? 'whole repo' : path) +
+          ' · at `' + lbl.slice(11) + '` (' + lbl.slice(0, 10) + ') · ' +
+          m.total.toLocaleString() + ' lines',
+        '',
+        '| ' + EXPORT_COLS.join(' | ') + ' |',
+        '|' + align.join('|') + '|',
+      ].concat(recs.map(r => '| ' + r.map(pipe).join(' | ') + ' |')).join('\n');
+    }
+
+    function copyRoster(fmt, btn) {
+      const model = buildRoster();
+      const recs  = exportRecords(model);
+      const text  = fmt === 'md' ? toMD(recs, model) : toCSV(recs);
+      const flash = ok => {
+        const prev = btn.textContent;
+        btn.textContent = ok ? 'copied ✓' : 'copy failed';
+        setTimeout(() => { btn.textContent = prev; }, 1200);
+      };
+      // navigator.clipboard needs a secure context, and these pages are usually
+      // opened over file:// where it's absent — fall back to the old way.
+      if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(text).then(() => flash(true), () => flash(legacyCopy(text)));
+      } else {
+        flash(legacyCopy(text));
+      }
+    }
+
+    function legacyCopy(text) {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.cssText = 'position:fixed;top:-1000px;opacity:0';
+      document.body.appendChild(ta);
+      ta.select();
+      let ok = false;
+      try { ok = document.execCommand('copy'); } catch (err) { ok = false; }
+      ta.remove();
+      return ok;
+    }
+
+    // ── split pane ────────────────────────────────────────────────────────────
+    const SPLIT_KEY = 'git-ownership.rosterH';
+    let rosterH = -1; // px; -1 until initialised from storage or the default
+
+    // Space the roster may take: the card minus its fixed furniture.
+    function splitMax() {
+      const card = document.querySelector('.card');
+      const cs   = getComputedStyle(card);
+      const gap  = parseFloat(cs.rowGap || cs.gap || 0) || 0;
+      const fixed = document.querySelector('.card-toolbar').offsetHeight +
+                    document.querySelector('.pin-bar').offsetHeight +
+                    document.getElementById('split-divider').offsetHeight;
+      return Math.max(0, card.clientHeight
+        - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom)
+        - gap * 4 - fixed);
+    }
+
+    function rosterVisible() {
+      return document.getElementById('roster-pane').style.display !== 'none';
+    }
+
+    function applySplit() {
+      const pane = document.getElementById('roster-pane');
+      const wrap = document.querySelector('.chart-wrap');
+      const max  = splitMax();
+      rosterH = Math.max(0, Math.min(max, rosterH));
+      const shut = rosterH < 40;        // snap closed near the bottom
+      const full = rosterH > max - 40;  // snap to full near the top
+      pane.style.display = shut ? 'none' : 'flex';
+      pane.style.height  = (full ? max : rosterH) + 'px';
+      wrap.style.display = full ? 'none' : '';
+      if (!shut) renderRoster();
+    }
+
+    function saveSplit() {
+      try { localStorage.setItem(SPLIT_KEY, String(rosterH)); } catch (err) { /* file:// */ }
+    }
+
+    // chart only → split → table only → chart only
+    function cycleSplit() {
+      const max = splitMax();
+      rosterH = rosterH < 40 ? Math.round(max * 0.45)
+              : rosterH > max - 40 ? 0
+              : max;
+      applySplit();
+      saveSplit();
+    }
+
     // ── custom tooltip positioner: follows cursor on the side, never below ────
     Chart.Tooltip.positioners.cursor = function(items, pos) {
       if (!items.length) return false;
@@ -443,6 +1068,7 @@
       type: 'line',
       data: { labels: DATA.labels, datasets: makeChartDatasets() },
       options: chartOptions(),
+      plugins: [pinLinePlugin], // chart-local: the sparkline must not get it
     });
 
     // Initialise bands controls and author count
@@ -451,7 +1077,111 @@
       const slider = document.getElementById('bands-slider');
       slider.max = max; slider.value = currentBands;
       document.getElementById('bands-input').value = currentBands;
-      document.getElementById('author-count').textContent = DATA.datasets.length;
+      document.getElementById('author-count').textContent = headAuthorCount().toLocaleString();
+    })();
+
+    // ── pin interactions: click/drag on the canvas, arrows on the keyboard ────
+    (() => {
+      const canvas = document.getElementById('chart');
+      const DRAG_SLOP = 4; // px of travel before a click counts as a drag
+      let scrubbing = false, dragged = false, downX = 0, downY = 0;
+
+      const pinFromEvent = e => {
+        const pos = Chart.helpers.getRelativePosition(e, chart);
+        const { left, right } = chart.chartArea;
+        setPin(snapshotAtPixel(Math.max(left, Math.min(right, pos.x))));
+      };
+
+      canvas.addEventListener('pointerdown', e => {
+        if (e.button !== 0) return;
+        scrubbing = true;
+        dragged   = false;
+        downX = e.clientX;
+        downY = e.clientY;
+        pinFromEvent(e);
+      });
+      canvas.addEventListener('pointermove', e => {
+        if (!scrubbing) return;
+        if (Math.abs(e.clientX - downX) > DRAG_SLOP ||
+            Math.abs(e.clientY - downY) > DRAG_SLOP) dragged = true;
+        pinFromEvent(e);
+      });
+      // A click that didn't travel also opens the author panel for the band it
+      // landed in. A drag is a scrub and must not, or every scrub would throw
+      // the panel open. Clicking above the stack pins without opening anything.
+      canvas.addEventListener('pointerup', e => {
+        if (!scrubbing || dragged) return;
+        const band = bandAt(e);
+        if (band >= 0) showPanel(band);
+      });
+      // On window, not the canvas: a drag that ends off-chart must still stop.
+      window.addEventListener('pointerup',     () => { scrubbing = false; });
+      window.addEventListener('pointercancel', () => { scrubbing = false; });
+
+      document.addEventListener('keydown', e => {
+        const tag = (document.activeElement || {}).tagName;
+        if (tag === 'INPUT' || tag === 'TEXTAREA') return; // don't steal from search
+        if (e.metaKey || e.ctrlKey || e.altKey) return;
+        const step = e.shiftKey ? 10 : 1;
+        switch (e.key) {
+          case 'ArrowLeft':  setPin(pinIdx - step); break;
+          case 'ArrowRight': setPin(pinIdx + step); break;
+          case 'Home':       setPin(0); break;
+          case 'End':        setPin(DATA.labels.length - 1); break;
+          default: return;
+        }
+        e.preventDefault();
+      });
+
+      updatePinBar();
+    })();
+
+    // ── split pane wiring ─────────────────────────────────────────────────────
+    (() => {
+      const divider = document.getElementById('split-divider');
+      const pane    = document.getElementById('roster-pane');
+      let startY = 0, startH = 0, dragging = false;
+
+      divider.addEventListener('pointerdown', e => {
+        if (e.button !== 0) return;
+        dragging = true;
+        startY = e.clientY;
+        startH = pane.offsetHeight;
+        divider.classList.add('dragging');
+        divider.setPointerCapture(e.pointerId);
+        e.preventDefault(); // don't start a text selection
+      });
+      divider.addEventListener('pointermove', e => {
+        if (!dragging) return;
+        rosterH = startH + (startY - e.clientY); // drag up grows the roster
+        applySplit();
+      });
+      const endDrag = () => {
+        if (!dragging) return;
+        dragging = false;
+        divider.classList.remove('dragging');
+        saveSplit();
+      };
+      divider.addEventListener('pointerup', endDrag);
+      divider.addEventListener('pointercancel', endDrag);
+      divider.addEventListener('dblclick', cycleSplit);
+
+      // Re-clamp when the window changes: a stored height may not fit any more.
+      window.addEventListener('resize', () => applySplit());
+
+      // Column priority: the author panel takes 420px out of the pane's width.
+      if (window.ResizeObserver) {
+        new ResizeObserver(entries => {
+          const w = entries[0].contentRect.width;
+          pane.classList.toggle('narrow', w < 760);
+          pane.classList.toggle('tiny',   w < 580);
+        }).observe(pane);
+      }
+
+      let stored = NaN;
+      try { stored = parseFloat(localStorage.getItem(SPLIT_KEY)); } catch (err) { /* file:// */ }
+      rosterH = Number.isFinite(stored) ? stored : Math.round(splitMax() * 0.4);
+      applySplit();
     })();
 
     function applyXMode() {
@@ -460,6 +1190,8 @@
       chart.data.datasets = makeChartDatasets();
       chart.options       = chartOptions();
       chart.update();
+      updatePinBar(); // totals are per-folder, so the readout must follow
+      if (rosterVisible()) renderRoster();
     }
 
     function setBands(n) {
@@ -467,6 +1199,35 @@
       document.getElementById('bands-slider').value = currentBands;
       document.getElementById('bands-input').value  = currentBands;
       applyXMode();
+    }
+
+    // Which stacked band is the pointer physically inside? Chart.js 'nearest'
+    // picks the closest point, not the visual area — so accumulate the stacked
+    // values at the pointer's x index and find the band whose pixel range
+    // brackets its y. Returns -1 outside the stack. Shared by hover and click
+    // so a click never depends on a hover having landed first (touch, or a
+    // click arriving with no prior pointermove).
+    function bandAt(nativeEvt) {
+      const pos  = Chart.helpers.getRelativePosition(nativeEvt, chart);
+      const xEls = chart.getElementsAtEventForMode(
+        nativeEvt, 'index', { intersect: false }, true
+      );
+      if (!xEls.length) return -1;
+      const xIdx     = xEls[0].index;
+      const yScale   = chart.scales.y;
+      const datasets = chart.data.datasets;
+      // Data is pre-stacked in both modes: dataset[i].data[xIdx] is the
+      // cumulative top of band i (a {x,y} object in time mode, a number in
+      // commits mode). Walk bands from bottom (0) upward.
+      let prevPixel = yScale.getPixelForValue(0);
+      for (let i = 0; i < datasets.length; i++) {
+        const pt   = datasets[i].data[xIdx];
+        const cumY = pt != null ? (typeof pt === 'object' ? pt.y : pt) : 0;
+        const topPixel = yScale.getPixelForValue(cumY);
+        if (pos.y >= topPixel && pos.y <= prevPixel) return i;
+        prevPixel = topPixel;
+      }
+      return -1;
     }
 
     function chartOptions() {
@@ -477,37 +1238,12 @@
         animation: false,
         interaction: { mode: 'index', intersect: false },
         onHover(evt) {
-          // Determine which stacked band the cursor is physically inside.
-          // 'nearest' picks the closest point, not the visual area — instead we
-          // accumulate stacked values at the hovered x index and find the band
-          // whose pixel range brackets the cursor's y coordinate.
-          if (!evt.native) return;
-          const pos = Chart.helpers.getRelativePosition(evt.native, chart);
-          const xEls = chart.getElementsAtEventForMode(
-            evt.native, 'index', { intersect: false }, true
-          );
-          if (!xEls.length) { hoveredDatasetIdx = -1; return; }
-          const xIdx = xEls[0].index;
-          const yScale = chart.scales.y;
-          const datasets = chart.data.datasets;
-          hoveredDatasetIdx = -1;
-          // Data is pre-stacked in both modes: dataset[i].data[xIdx] is the
-          // cumulative top of band i (a {x,y} object in time mode, a number in
-          // commits mode). Walk bands from bottom (0) upward.
-          let prevPixel = yScale.getPixelForValue(0);
-          for (let i = 0; i < datasets.length; i++) {
-            const pt   = datasets[i].data[xIdx];
-            const cumY = pt != null ? (typeof pt === 'object' ? pt.y : pt) : 0;
-            const topPixel = yScale.getPixelForValue(cumY);
-            if (pos.y >= topPixel && pos.y <= prevPixel) {
-              hoveredDatasetIdx = i; break;
-            }
-            prevPixel = topPixel;
-          }
+          if (evt.native) hoveredDatasetIdx = bandAt(evt.native);
         },
-        onClick() {
-          if (hoveredDatasetIdx >= 0) showPanel(hoveredDatasetIdx);
-        },
+        // No onClick: one job per surface. The plot area picks a time (the
+        // canvas pointer handlers below pin a snapshot); the legend and the
+        // search box pick an author. Clicking a band used to open the author
+        // panel, but that would now fire on every pin.
         scales: {
           x: xMode === 'time' ? {
             type: 'linear',
@@ -605,8 +1341,10 @@
     function selectFolder(idx) {
       currentFolderIdx = idx;
       DATA = FOLDERS[idx].chart;
+      tailOpen = false; // a different folder has a different tail
+      selectedKey = null; // the panel is closed just below
       searchIdx = buildSearchIdx();
-      document.getElementById('author-count').textContent = DATA.datasets.length;
+      document.getElementById('author-count').textContent = headAuthorCount().toLocaleString();
       document.getElementById('author-panel').classList.add('hidden');
       if (sparkChart) { sparkChart.destroy(); sparkChart = null; }
       updateFolderBtn();
@@ -744,6 +1482,7 @@
       const panel = document.getElementById('author-panel');
       panel.dataset.authorIdx = '';
       panel.classList.remove('hidden');
+      selectAuthor('m' + (m.email || m.name));
     }
 
     // showPanel: display index into displayDatasets() — used by chart click / legend.
@@ -800,6 +1539,7 @@
         const panel = document.getElementById('author-panel');
         panel.dataset.authorIdx = '';
         panel.classList.remove('hidden');
+        selectAuthor(null); // Others is an aggregate — no single row to mark
       } else {
         // Individual author band — displayIdx === rawIdx for the major slice.
         showRawPanel(displayIdx);
@@ -849,6 +1589,7 @@
       panel.classList.remove('hidden');
       document.getElementById('author-search').value = '';
       document.getElementById('search-dropdown').classList.add('hidden');
+      selectAuthor('d' + rawIdx);
     }
 
     function stat(value, label, full) {
@@ -900,6 +1641,7 @@
     function closePanel() {
       document.getElementById('author-panel').classList.add('hidden');
       if (sparkChart) { sparkChart.destroy(); sparkChart = null; }
+      selectAuthor(null);
     }
   </script>
 </body>
